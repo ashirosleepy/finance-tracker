@@ -20,7 +20,7 @@ declare
   v_debt_lent uuid;
   v_debt_owed uuid;
 begin
-  select id into v_user_id from auth.users where email = 'YOUR_EMAIL_HERE' limit 1;
+  select id into v_user_id from auth.users where email = 'abeshiroanime@gmail.com' limit 1;
   if v_user_id is null then
     raise exception 'No user found with that email. Sign up in the app first, then edit this script.';
   end if;
