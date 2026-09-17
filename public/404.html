@@ -1,0 +1,24 @@
+<!doctype html>
+<!--
+  GitHub Pages serves this file for any unknown path (e.g. a hard refresh on
+  /finance-tracker/transactions). It re-encodes the path into a query string
+  and redirects to index.html, which decodes it back — this is the standard
+  workaround for client-side routing on GitHub Pages (spa-github-pages trick).
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <script>
+      var segmentCount = 1 // number of segments in the base path, e.g. /finance-tracker/ = 1
+      var l = window.location
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        l.pathname.split('/').slice(0, 1 + segmentCount).join('/') + '/?p=/' +
+        l.pathname.slice(1).split('/').slice(segmentCount).join('/').replace(/&/g, '~and~') +
+        (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+        l.hash
+      )
+    </script>
+  </head>
+  <body></body>
+</html>
