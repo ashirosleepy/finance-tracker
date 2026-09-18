@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getAccountBalances, getSavingsGoals, createSavingsGoal } from '../lib/queries'
+import { getAccountBalances, getSavingsGoals, createSavingsGoal, updateSavingsGoal } from '../lib/queries'
 import { computeAssetTotals } from '../lib/calculations'
 import { formatVND, formatDate } from '../lib/formatters'
 
@@ -12,6 +12,7 @@ export default function Savings() {
   const [goals, setGoals] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
+  const [editingId, setEditingId] = useState(null)
 
   async function load() {
     const ab = await getAccountBalances()
@@ -25,20 +26,49 @@ export default function Savings() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    await createSavingsGoal({
-      user_id: user.id, account_id: form.account_id || null, name: form.name,
-      target_amount: form.target_amount ? Number(form.target_amount) : null,
-      target_date: form.target_date || null, note: form.note || null,
-    })
-    setForm(emptyForm); setShowForm(false)
+    if (editingId) {
+      await updateSavingsGoal(editingId, {
+        account_id: form.account_id || null, name: form.name,
+        target_amount: form.target_amount ? Number(form.target_amount) : null,
+        target_date: form.target_date || null, note: form.note || null,
+      })
+    } else {
+      await createSavingsGoal({
+        user_id: user.id, account_id: form.account_id || null, name: form.name,
+        target_amount: form.target_amount ? Number(form.target_amount) : null,
+        target_date: form.target_date || null, note: form.note || null,
+      })
+    }
+    setForm(emptyForm); setShowForm(false); setEditingId(null)
     await load()
+  }
+
+  function handleEdit(g) {
+    setForm({
+      account_id: g.account_id || '',
+      name: g.name || '',
+      target_amount: g.target_amount ?? '',
+      target_date: g.target_date || '',
+      note: g.note || '',
+    })
+    setEditingId(g.id)
+    setShowForm(true)
+  }
+
+  function handleCancelForm() {
+    setForm(emptyForm); setShowForm(false); setEditingId(null)
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Tiết kiệm</h1>
-        <button className="btn-primary" onClick={() => setShowForm((s) => !s)}>{showForm ? 'Đóng' : '+ Thêm mục tiêu'}</button>
+        <button
+          className="btn-primary"
+          onClick={() => (showForm ? handleCancelForm() : (setForm(emptyForm), setEditingId(null), setShowForm(true)))}
+        >
+          {showForm ? 'Đóng' : '+ Thêm mục tiêu'}
+        </button>
       </div>
 
       <div className="card">
@@ -71,7 +101,10 @@ export default function Savings() {
             <label className="label">Ngày mục tiêu</label>
             <input type="date" className="input" value={form.target_date} onChange={(e) => setForm({ ...form, target_date: e.target.value })} />
           </div>
-          <div className="col-span-2 flex justify-end"><button className="btn-primary">Lưu</button></div>
+          <div className="col-span-2 flex justify-end gap-3">
+            <button type="button" className="text-sm text-slate-400 hover:text-slate-600" onClick={handleCancelForm}>Hủy</button>
+            <button className="btn-primary">{editingId ? 'Cập nhật' : 'Lưu'}</button>
+          </div>
         </form>
       )}
 
@@ -93,7 +126,10 @@ export default function Savings() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {goals.map((g) => (
               <div key={g.id} className="card">
-                <div className="font-medium">{g.name}</div>
+                <div className="flex items-start justify-between">
+                  <div className="font-medium">{g.name}</div>
+                  <button className="text-xs text-slate-400 hover:text-blue-600" onClick={() => handleEdit(g)}>Sửa</button>
+                </div>
                 {g.target_amount && <div className="text-sm text-slate-500 mt-1">Mục tiêu: {formatVND(g.target_amount)}</div>}
                 {g.target_date && <div className="text-xs text-slate-400">Hạn: {formatDate(g.target_date)}</div>}
               </div>
