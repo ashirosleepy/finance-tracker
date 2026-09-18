@@ -271,6 +271,12 @@ export async function createSavingsGoal(goal) {
   return data
 }
 
+export async function updateSavingsGoal(id, patch) {
+  const { data, error } = await supabase.from('savings_goals').update(patch).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
 // ---------------------------------------------------------------------------
 // Net worth summary (view)
 // ---------------------------------------------------------------------------
