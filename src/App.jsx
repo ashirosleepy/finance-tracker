@@ -16,7 +16,7 @@ import Settings from './pages/Settings'
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter basename="/finance-tracker">
+      <BrowserRouter basename="/finance-tracker/">
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route
