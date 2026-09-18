@@ -11,6 +11,7 @@ export default function Accounts() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [loading, setLoading] = useState(true)
+  const [editingId, setEditingId] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -21,16 +22,42 @@ export default function Accounts() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    await createAccount({
-      user_id: user.id,
-      name: form.name,
-      type: form.type,
-      account_number: form.account_number || null,
-      opening_balance: Number(form.opening_balance) || 0,
-      note: form.note || null,
-    })
-    setForm(emptyForm); setShowForm(false)
+    if (editingId) {
+      await updateAccount(editingId, {
+        name: form.name,
+        type: form.type,
+        account_number: form.account_number || null,
+        opening_balance: Number(form.opening_balance) || 0,
+        note: form.note || null,
+      })
+    } else {
+      await createAccount({
+        user_id: user.id,
+        name: form.name,
+        type: form.type,
+        account_number: form.account_number || null,
+        opening_balance: Number(form.opening_balance) || 0,
+        note: form.note || null,
+      })
+    }
+    setForm(emptyForm); setShowForm(false); setEditingId(null)
     await load()
+  }
+
+  function handleEdit(a) {
+    setForm({
+      name: a.name || '',
+      type: a.type || 'bank',
+      account_number: a.account_number || '',
+      opening_balance: a.opening_balance ?? '',
+      note: a.note || '',
+    })
+    setEditingId(a.account_id)
+    setShowForm(true)
+  }
+
+  function handleCancelForm() {
+    setForm(emptyForm); setShowForm(false); setEditingId(null)
   }
 
   async function handleToggleActive(a) {
@@ -57,7 +84,10 @@ export default function Accounts() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Tài khoản</h1>
-        <button className="btn-primary" onClick={() => setShowForm((s) => !s)}>
+        <button
+          className="btn-primary"
+          onClick={() => (showForm ? handleCancelForm() : (setForm(emptyForm), setEditingId(null), setShowForm(true)))}
+        >
           {showForm ? 'Đóng' : '+ Thêm tài khoản'}
         </button>
       </div>
@@ -87,8 +117,11 @@ export default function Accounts() {
             <label className="label">Ghi chú</label>
             <input className="input" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
           </div>
-          <div className="col-span-2 flex justify-end">
-            <button className="btn-primary">Lưu</button>
+          <div className="col-span-2 flex justify-end gap-3">
+            <button type="button" className="text-sm text-slate-400 hover:text-slate-600" onClick={handleCancelForm}>
+              Hủy
+            </button>
+            <button className="btn-primary">{editingId ? 'Cập nhật' : 'Lưu'}</button>
           </div>
         </form>
       )}
@@ -104,6 +137,7 @@ export default function Accounts() {
                     <div className="font-medium">{a.name}</div>
                     <div className="text-xl font-semibold mt-1">{formatVND(a.current_balance)}</div>
                     <div className="flex gap-3 mt-3 text-xs">
+                      <button className="text-slate-400 hover:text-blue-600" onClick={() => handleEdit(a)}>Sửa</button>
                       <button className="text-slate-400 hover:text-slate-600" onClick={() => handleToggleActive(a)}>Ẩn</button>
                       <button className="text-slate-400 hover:text-red-600" onClick={() => handleDelete(a)}>Xóa</button>
                     </div>
