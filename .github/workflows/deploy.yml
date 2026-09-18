@@ -3,18 +3,31 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main  # Mỗi khi bạn push lên nhánh main, hành động này sẽ chạy
+      - main 
+
+permissions:
+  contents: write
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Thiết lập Node 20 để tránh lỗi cảnh báo của GitHub
+
+      - name: Install dependencies
+        run: npm install # Nếu bạn dùng yarn thì đổi thành: yarn install
+
+      - name: Build project
+        run: npm run build # Nếu bạn dùng yarn thì đổi thành: yarn build
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./  # Sửa thành ./build hoặc ./dist nếu bạn dùng React/Vite/Vue
-#
+          publish_dir: ./dist # Vite sẽ tự động build code vào thư mục dist này
