@@ -1,5 +1,4 @@
-// 1. Đổi BrowserRouter thành HashRouter ở dòng import
-import { HashRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
@@ -17,8 +16,7 @@ import Settings from './pages/Settings'
 export default function App() {
   return (
     <AuthProvider>
-      {/* 2. Thay BrowserRouter bằng HashRouter. Bạn có thể xóa luôn phần basename đi vì HashRouter không cần nữa */}
-      <HashRouter>
+      <BrowserRouter basename="/finance-tracker/">
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route
@@ -40,7 +38,7 @@ export default function App() {
             <Route path="settings" element={<Settings />} />
           </Route>
         </Routes>
-      </HashRouter>
+      </BrowserRouter>
     </AuthProvider>
   )
 }
