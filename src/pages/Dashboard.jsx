@@ -37,6 +37,10 @@ export default function Dashboard() {
     () => computeNetWorth(assets.realAssetsTotal, liabilities.debtOwedToMe, liabilities.totalLiabilities),
     [assets, liabilities]
   )
+  const netLiquidAfterDebt = useMemo(
+    () => assets.liquidTotal - liabilities.debtIOwe - liabilities.creditCardDebt,
+    [assets, liabilities]
+  )
 
   const now = new Date()
   const weekIncome = totalIncome(transactions, startOfWeek(now), now)
@@ -59,6 +63,11 @@ export default function Dashboard() {
         <h1 className="text-xl font-semibold mb-4">Tổng quan</h1>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <StatCard label="Tài sản thực tế (không gồm tiết kiệm)" value={formatVND(assets.liquidTotal)} />
+          <StatCard
+            label="Tài sản thực tế sau khi trừ nợ"
+            value={formatVND(netLiquidAfterDebt)}
+            tone={netLiquidAfterDebt >= 0 ? 'positive' : 'negative'}
+          />
           <StatCard label="Tiền tiết kiệm" value={formatVND(assets.savings)} tone="positive" />
           <StatCard label="Net Worth" value={formatVND(netWorth)} tone={netWorth >= 0 ? 'positive' : 'negative'} />
           <StatCard label="Người khác nợ tôi" value={formatVND(liabilities.debtOwedToMe)} tone="neutral" />
