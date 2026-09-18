@@ -137,7 +137,7 @@ export default function TransactionForm({ accounts, categories, creditCards, deb
         <div>
           <label className="label">Số tiền (₫)</label>
           <input
-            type="number" min="0" step="1000" required className="input"
+            type="number" min="0" step="1" required className="input"
             value={form.amount} onChange={(e) => update({ amount: e.target.value })}
           />
         </div>
