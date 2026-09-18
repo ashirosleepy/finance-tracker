@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  /* Extra baseline bump on top of the Tailwind fontSize scale, purely for
+     mobile screens where "chữ to hơn" matters most. Desktop stays as the
+     tailwind.config.js scale defines it. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+.card {
+  @apply bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-5;
+}
+
+/* Bigger tap targets on touch devices (44px+ recommended minimum). */
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors min-h-[44px];
+}
+.btn-primary {
+  @apply btn bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-700;
+}
+.btn-secondary {
+  @apply btn bg-slate-100 text-slate-700 hover:bg-slate-200 active:bg-slate-200;
+}
+.btn-danger {
+  @apply btn bg-red-50 text-red-600 hover:bg-red-100 active:bg-red-100;
+}
+.btn-icon {
+  @apply inline-flex items-center justify-center rounded-lg p-2 min-h-[40px] min-w-[40px] transition-colors;
+}
+
+.input {
+  @apply w-full rounded-xl border border-slate-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-brand-500;
+}
+
+.label {
+  @apply block text-sm font-medium text-slate-500 mb-1;
+}
