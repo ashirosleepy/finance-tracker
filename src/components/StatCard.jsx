@@ -9,8 +9,8 @@ export default function StatCard({ label, value, tone = 'default', sub }) {
   return (
     <div className="card">
       <div className="text-sm text-slate-500">{label}</div>
-      <div className={`text-2xl font-semibold mt-1 ${toneClass}`}>{value}</div>
-      {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
+      <div className={`text-3xl font-semibold mt-1 ${toneClass}`}>{value}</div>
+      {sub && <div className="text-sm text-slate-400 mt-1">{sub}</div>}
     </div>
   )
 }

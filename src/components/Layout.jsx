@@ -18,8 +18,8 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
-      <aside className="md:w-56 shrink-0 bg-white border-b md:border-b-0 md:border-r border-slate-100">
-        <div className="p-4 font-semibold text-brand-700 text-lg">💰 Tài chính</div>
+      <aside className="sticky top-0 z-10 md:z-auto md:h-screen md:sticky md:top-0 md:w-56 shrink-0 bg-white border-b md:border-b-0 md:border-r border-slate-100">
+        <div className="p-4 font-semibold text-brand-700 text-xl">💰 Tài chính</div>
         <nav className="flex md:flex-col overflow-x-auto md:overflow-visible px-2 pb-2 md:pb-4 gap-1">
           {NAV_ITEMS.map((item) => (
             <NavLink
@@ -27,8 +27,8 @@ export default function Layout() {
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `whitespace-nowrap px-3 py-2 rounded-lg text-sm font-medium ${
-                  isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50'
+                `whitespace-nowrap px-3.5 py-2.5 rounded-lg text-base font-medium min-h-[44px] flex items-center ${
+                  isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 active:bg-slate-50'
                 }`
               }
             >
@@ -36,15 +36,22 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        <div className="hidden md:block mt-auto p-4 border-t border-slate-100 text-xs text-slate-400">
+        <div className="hidden md:block mt-auto p-4 border-t border-slate-100 text-sm text-slate-400">
           <div className="truncate mb-2">{user?.email}</div>
-          <button onClick={signOut} className="btn-secondary w-full text-xs">
+          <button onClick={signOut} className="btn-secondary w-full">
             Đăng xuất
           </button>
         </div>
       </aside>
       <main className="flex-1 p-4 md:p-8 max-w-6xl mx-auto w-full">
         <Outlet />
+        {/* Sign-out stays reachable on mobile since the sidebar footer is hidden there */}
+        <div className="md:hidden mt-8 pt-4 border-t border-slate-100 text-sm text-slate-400">
+          <div className="truncate mb-2">{user?.email}</div>
+          <button onClick={signOut} className="btn-secondary w-full">
+            Đăng xuất
+          </button>
+        </div>
       </main>
     </div>
   )

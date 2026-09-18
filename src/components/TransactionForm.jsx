@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { TRANSACTION_TYPE_LABELS } from '../lib/formatters'
 
 const TYPE_GROUPS = [
@@ -38,10 +38,37 @@ const emptyForm = {
   adjustment_direction: 'increase',
 }
 
-export default function TransactionForm({ accounts, categories, creditCards, debts, userId, onSubmit, onCancel }) {
-  const [form, setForm] = useState(emptyForm)
+// Converts a transaction row (as returned by getTransactions, with amount as
+// number and occurred_at as ISO string) back into the shape the form edits.
+function toFormState(tx) {
+  return {
+    type: tx.type,
+    amount: String(tx.amount ?? ''),
+    occurred_at: tx.occurred_at ? new Date(tx.occurred_at).toISOString().slice(0, 16) : emptyForm.occurred_at,
+    from_account_id: tx.from_account_id || '',
+    to_account_id: tx.to_account_id || '',
+    category_id: tx.category_id || '',
+    credit_card_id: tx.credit_card_id || '',
+    debt_id: tx.debt_id || '',
+    description: tx.description || '',
+    note: tx.note || '',
+    // adjustment rows only ever populate one of from/to; direction is derived
+    adjustment_direction: tx.to_account_id ? 'increase' : 'decrease',
+  }
+}
+
+// Pass `initialData` (a transaction row) to edit it in place instead of
+// creating a new one. onSubmit(payload, id) receives the transaction's id
+// as the second argument when editing, or undefined when creating.
+export default function TransactionForm({ accounts, categories, creditCards, debts, userId, onSubmit, onCancel, initialData }) {
+  const [form, setForm] = useState(() => (initialData ? toFormState(initialData) : emptyForm))
   const [saving, setSaving] = useState(false)
+  const isEditing = Boolean(initialData)
   const fields = FIELD_MAP[form.type] || []
+
+  useEffect(() => {
+    setForm(initialData ? toFormState(initialData) : emptyForm)
+  }, [initialData])
 
   function update(patch) {
     setForm((f) => ({ ...f, ...patch }))
@@ -58,6 +85,11 @@ export default function TransactionForm({ accounts, categories, creditCards, deb
         occurred_at: new Date(form.occurred_at).toISOString(),
         description: form.description || null,
         note: form.note || null,
+        from_account_id: null,
+        to_account_id: null,
+        category_id: null,
+        credit_card_id: null,
+        debt_id: null,
       }
 
       if (fields.includes('fromAccount')) payload.from_account_id = form.from_account_id || null
@@ -71,8 +103,12 @@ export default function TransactionForm({ accounts, categories, creditCards, deb
         else payload.from_account_id = form.from_account_id || null
       }
 
-      await onSubmit(payload)
-      setForm(emptyForm)
+      if (isEditing) {
+        await onSubmit(payload, initialData.id)
+      } else {
+        await onSubmit(payload)
+        setForm(emptyForm)
+      }
     } finally {
       setSaving(false)
     }
@@ -83,8 +119,13 @@ export default function TransactionForm({ accounts, categories, creditCards, deb
 
   return (
     <form onSubmit={handleSubmit} className="card space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2">
+      {isEditing && (
+        <div className="text-sm font-medium text-brand-700 bg-brand-50 rounded-lg px-3 py-2">
+          Đang sửa giao dịch
+        </div>
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2">
           <label className="label">Loại giao dịch</label>
           <select className="input" value={form.type} onChange={(e) => update({ type: e.target.value })}>
             {TYPE_GROUPS.map((t) => (
@@ -172,15 +213,15 @@ export default function TransactionForm({ accounts, categories, creditCards, deb
               <option value="">-- Chọn khoản nợ --</option>
               {debts.map((d) => <option key={d.debt_id} value={d.debt_id}>{d.person_name} ({d.direction === 'i_owe' ? 'tôi nợ' : 'nợ tôi'})</option>)}
             </select>
-            <p className="text-xs text-slate-400 mt-1">Chưa có khoản nợ phù hợp? Tạo trước ở trang "Nợ".</p>
+            <p className="text-sm text-slate-400 mt-1">Chưa có khoản nợ phù hợp? Tạo trước ở trang "Nợ".</p>
           </div>
         )}
 
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="label">Mô tả</label>
           <input className="input" value={form.description} onChange={(e) => update({ description: e.target.value })} />
         </div>
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="label">Ghi chú</label>
           <input className="input" value={form.note} onChange={(e) => update({ note: e.target.value })} />
         </div>
@@ -189,7 +230,7 @@ export default function TransactionForm({ accounts, categories, creditCards, deb
       <div className="flex gap-2 justify-end">
         {onCancel && <button type="button" className="btn-secondary" onClick={onCancel}>Hủy</button>}
         <button type="submit" disabled={saving} className="btn-primary">
-          {saving ? 'Đang lưu...' : 'Lưu giao dịch'}
+          {saving ? 'Đang lưu...' : isEditing ? 'Cập nhật giao dịch' : 'Lưu giao dịch'}
         </button>
       </div>
     </form>
