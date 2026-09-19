@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import {
   getAccounts, getCategories, getCreditCardBalances, getDebtBalances,
-  getTransactions, createTransaction, deleteTransaction,
+  getTransactions, createTransaction, updateTransaction, deleteTransaction,
 } from '../lib/queries'
 import { TRANSACTION_TYPE_LABELS } from '../lib/formatters'
 import TransactionForm from '../components/TransactionForm'
@@ -16,6 +16,7 @@ export default function Transactions() {
   const [debts, setDebts] = useState([])
   const [transactions, setTransactions] = useState([])
   const [showForm, setShowForm] = useState(false)
+  const [editingTransaction, setEditingTransaction] = useState(null)
   const [filters, setFilters] = useState({ type: '', accountId: '', categoryId: '', search: '' })
   const [loading, setLoading] = useState(true)
 
@@ -41,10 +42,25 @@ export default function Transactions() {
   useEffect(() => { loadAll() }, [])
   useEffect(() => { loadTransactions() }, [filters])
 
-  async function handleCreate(payload) {
-    await createTransaction(payload)
+  async function handleSubmit(payload, id) {
+    if (id) {
+      await updateTransaction(id, payload)
+    } else {
+      await createTransaction(payload)
+    }
     setShowForm(false)
+    setEditingTransaction(null)
     await loadTransactions()
+  }
+
+  function handleEdit(tx) {
+    setEditingTransaction(tx)
+    setShowForm(true)
+  }
+
+  function handleCloseForm() {
+    setShowForm(false)
+    setEditingTransaction(null)
   }
 
   async function handleDelete(id) {
@@ -57,7 +73,13 @@ export default function Transactions() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Giao dịch</h1>
-        <button className="btn-primary" onClick={() => setShowForm((s) => !s)}>
+        <button
+          className="btn-primary"
+          onClick={() => {
+            if (showForm) handleCloseForm()
+            else setShowForm(true)
+          }}
+        >
           {showForm ? 'Đóng' : '+ Thêm giao dịch'}
         </button>
       </div>
@@ -65,7 +87,8 @@ export default function Transactions() {
       {showForm && (
         <TransactionForm
           accounts={accounts} categories={categories} creditCards={creditCards} debts={debts}
-          userId={user.id} onSubmit={handleCreate} onCancel={() => setShowForm(false)}
+          userId={user.id} initialData={editingTransaction}
+          onSubmit={handleSubmit} onCancel={handleCloseForm}
         />
       )}
 
@@ -89,7 +112,7 @@ export default function Transactions() {
       </div>
 
       {loading ? <div className="text-slate-400">Đang tải...</div> : (
-        <TransactionTable transactions={transactions} onDelete={handleDelete} />
+        <TransactionTable transactions={transactions} onDelete={handleDelete} onEdit={handleEdit} />
       )}
     </div>
   )
