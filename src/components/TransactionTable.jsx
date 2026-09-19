@@ -5,7 +5,11 @@ const INCOME_TYPES = new Set(['income', 'debt_collect', 'debt_borrow'])
 
 function rowMeta(t) {
   const sign = INCOME_TYPES.has(t.type) ? '+' : t.type === 'transfer' || t.type === 'adjustment' ? '' : '-'
-  const color = INCOME_TYPES.has(t.type) ? 'text-brand-600' : sign === '-' ? 'text-red-600' : 'text-slate-600'
+  const color = INCOME_TYPES.has(t.type)
+    ? 'text-brand-600 dark:text-brand-400'
+    : sign === '-'
+      ? 'text-red-600 dark:text-red-400'
+      : 'text-slate-600 dark:text-slate-300'
   return { sign, color }
 }
 
@@ -39,13 +43,13 @@ export default function TransactionTable({ transactions, onDelete, onEdit }) {
                 )}
               </div>
               {t.affects_balance === false && (
-                <div className="text-xs text-amber-600 bg-amber-50 rounded px-2 py-1 mt-2 inline-block">
+                <div className="text-xs text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/30 rounded px-2 py-1 mt-2 inline-block">
                   Không tính vào số dư
                 </div>
               )}
-              <div className="flex gap-4 mt-3 pt-3 border-t border-slate-50">
-                <button className="text-sm font-medium text-brand-600" onClick={() => onEdit?.(t)}>Sửa</button>
-                <button className="text-sm font-medium text-red-600" onClick={() => onDelete(t.id)}>Xóa</button>
+              <div className="flex gap-4 mt-3 pt-3 border-t border-slate-50 dark:border-slate-800">
+                <button className="text-sm font-medium text-brand-600 dark:text-brand-400" onClick={() => onEdit?.(t)}>Sửa</button>
+                <button className="text-sm font-medium text-red-600 dark:text-red-400" onClick={() => onDelete(t.id)}>Xóa</button>
               </div>
             </div>
           )
@@ -56,7 +60,7 @@ export default function TransactionTable({ transactions, onDelete, onEdit }) {
       <div className="hidden sm:block card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-400 border-b border-slate-100">
+            <tr className="text-left text-slate-400 border-b border-slate-100 dark:border-slate-800">
               <th className="py-2 pr-3">Ngày</th>
               <th className="py-2 pr-3">Loại</th>
               <th className="py-2 pr-3">Mô tả</th>
@@ -69,14 +73,14 @@ export default function TransactionTable({ transactions, onDelete, onEdit }) {
             {transactions.map((t) => {
               const { sign, color } = rowMeta(t)
               return (
-                <tr key={t.id} className="border-b border-slate-50 last:border-0">
+                <tr key={t.id} className="border-b border-slate-50 last:border-0 dark:border-slate-800">
                   <td className="py-2 pr-3 whitespace-nowrap text-slate-500">{formatDateTime(t.occurred_at)}</td>
                   <td className="py-2 pr-3 whitespace-nowrap">{TRANSACTION_TYPE_LABELS[t.type]}</td>
                   <td className="py-2 pr-3">
                     {t.description}
                     {t.category?.name && <span className="text-slate-400"> · {t.category.name}</span>}
                     {t.affects_balance === false && (
-                      <span className="ml-2 text-xs text-amber-600 bg-amber-50 rounded px-1.5 py-0.5">
+                      <span className="ml-2 text-xs text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/30 rounded px-1.5 py-0.5">
                         Không tính vào số dư
                       </span>
                     )}
