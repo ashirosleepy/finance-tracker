@@ -18,16 +18,19 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Thiết lập Node 20 để tránh lỗi cảnh báo của GitHub
+          node-version: '20'
 
       - name: Install dependencies
-        run: npm install # Nếu bạn dùng yarn thì đổi thành: yarn install
+        run: npm install
 
       - name: Build project
-        run: npm run build # Nếu bạn dùng yarn thì đổi thành: yarn build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist # Vite sẽ tự động build code vào thư mục dist này
+          publish_dir: ./dist
