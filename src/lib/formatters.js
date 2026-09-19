@@ -6,13 +6,13 @@ export function formatVND(amount) {
 export function formatDate(dateStr) {
   if (!dateStr) return ''
   const d = new Date(dateStr)
-  return d.toLocaleDateString('vi-VN')
+  return d.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
 }
 
 export function formatDateTime(dateStr) {
   if (!dateStr) return ''
   const d = new Date(dateStr)
-  return d.toLocaleString('vi-VN')
+  return d.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
 }
 
 export const ACCOUNT_TYPE_LABELS = {
