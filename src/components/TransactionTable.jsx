@@ -38,6 +38,11 @@ export default function TransactionTable({ transactions, onDelete, onEdit }) {
                   <> · {t.from_account?.name || ''}{t.from_account && t.to_account ? ' → ' : ''}{t.to_account?.name || ''}</>
                 )}
               </div>
+              {t.affects_balance === false && (
+                <div className="text-xs text-amber-600 bg-amber-50 rounded px-2 py-1 mt-2 inline-block">
+                  Không tính vào số dư
+                </div>
+              )}
               <div className="flex gap-4 mt-3 pt-3 border-t border-slate-50">
                 <button className="text-sm font-medium text-brand-600" onClick={() => onEdit?.(t)}>Sửa</button>
                 <button className="text-sm font-medium text-red-600" onClick={() => onDelete(t.id)}>Xóa</button>
@@ -70,6 +75,11 @@ export default function TransactionTable({ transactions, onDelete, onEdit }) {
                   <td className="py-2 pr-3">
                     {t.description}
                     {t.category?.name && <span className="text-slate-400"> · {t.category.name}</span>}
+                    {t.affects_balance === false && (
+                      <span className="ml-2 text-xs text-amber-600 bg-amber-50 rounded px-1.5 py-0.5">
+                        Không tính vào số dư
+                      </span>
+                    )}
                   </td>
                   <td className="py-2 pr-3 text-slate-500 whitespace-nowrap">
                     {t.from_account?.name || ''}{t.from_account && t.to_account ? ' → ' : ''}{t.to_account?.name || ''}

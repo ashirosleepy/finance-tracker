@@ -36,6 +36,7 @@ const emptyForm = {
   description: '',
   note: '',
   adjustment_direction: 'increase',
+  affects_balance: true,
 }
 
 // Converts a transaction row (as returned by getTransactions, with amount as
@@ -54,6 +55,7 @@ function toFormState(tx) {
     note: tx.note || '',
     // adjustment rows only ever populate one of from/to; direction is derived
     adjustment_direction: tx.to_account_id ? 'increase' : 'decrease',
+    affects_balance: tx.affects_balance ?? true,
   }
 }
 
@@ -85,6 +87,7 @@ export default function TransactionForm({ accounts, categories, creditCards, deb
         occurred_at: new Date(form.occurred_at).toISOString(),
         description: form.description || null,
         note: form.note || null,
+        affects_balance: form.affects_balance,
         from_account_id: null,
         to_account_id: null,
         category_id: null,
@@ -147,6 +150,17 @@ export default function TransactionForm({ accounts, categories, creditCards, deb
             type="datetime-local" required className="input"
             value={form.occurred_at} onChange={(e) => update({ occurred_at: e.target.value })}
           />
+        </div>
+
+        <div className="sm:col-span-2 flex items-start gap-2 bg-slate-50 rounded-lg px-3 py-2">
+          <input
+            id="affects_balance" type="checkbox" className="mt-1"
+            checked={!form.affects_balance}
+            onChange={(e) => update({ affects_balance: !e.target.checked })}
+          />
+          <label htmlFor="affects_balance" className="text-sm text-slate-600">
+            Chỉ ghi nhận để thống kê chi tiêu (ví dụ: giao dịch trong quá khứ) — không cộng/trừ vào số dư hiện tại
+          </label>
         </div>
 
         {form.type === 'adjustment' && (
