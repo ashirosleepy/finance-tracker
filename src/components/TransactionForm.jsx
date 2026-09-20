@@ -33,6 +33,17 @@ function toLocalInputValue(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+// Amount is stored in form state as a plain digit string ("1500000") and
+// only formatted with thousands separators ("1.500.000") for display.
+function formatAmount(digits) {
+  if (!digits) return ''
+  return Number(digits).toLocaleString('vi-VN')
+}
+
+function parseAmountInput(raw) {
+  return raw.replace(/\D/g, '') // keep digits only
+}
+
 function nowLocal() {
   return toLocalInputValue(new Date())
 }
@@ -61,7 +72,7 @@ function getEmptyForm() {
 function toFormState(tx) {
   return {
     type: tx.type,
-    amount: String(tx.amount ?? ''),
+    amount: tx.amount != null ? String(Math.trunc(tx.amount)) : '',
     occurred_at: tx.occurred_at ? toLocalInputValue(new Date(tx.occurred_at)) : nowLocal(),
     from_account_id: tx.from_account_id || '',
     to_account_id: tx.to_account_id || '',
@@ -157,8 +168,10 @@ export default function TransactionForm({ accounts, categories, creditCards, deb
         <div>
           <label className="label">Số tiền (₫)</label>
           <input
-            type="number" min="0" step="1" required className="input"
-            value={form.amount} onChange={(e) => update({ amount: e.target.value })}
+            type="text" inputMode="numeric" required className="input"
+            placeholder="0"
+            value={formatAmount(form.amount)}
+            onChange={(e) => update({ amount: parseAmountInput(e.target.value) })}
           />
         </div>
         <div>
