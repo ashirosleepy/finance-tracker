@@ -17,6 +17,9 @@ export default function Dashboard() {
   const [creditCardBalances, setCreditCardBalances] = useState([])
   const [transactions, setTransactions] = useState([])
   const [recurring, setRecurring] = useState([])
+  const [showSensitive, setShowSensitive] = useState(false)
+
+  const mask = (value) => (showSensitive ? formatVND(value) : '••••••••')
 
   useEffect(() => {
     async function load() {
@@ -60,7 +63,16 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-xl font-semibold mb-4">Tổng quan</h1>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-xl font-semibold">Tổng quan</h1>
+          <button
+            type="button"
+            className="text-xs text-slate-400 hover:text-slate-600"
+            onClick={() => setShowSensitive((v) => !v)}
+          >
+            {showSensitive ? 'Ẩn số liệu' : 'Hiện số liệu'}
+          </button>
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <StatCard label="Tài sản thực tế (không gồm tiết kiệm)" value={formatVND(assets.liquidTotal)} />
           <StatCard
@@ -68,8 +80,8 @@ export default function Dashboard() {
             value={formatVND(netLiquidAfterDebt)}
             tone={netLiquidAfterDebt >= 0 ? 'positive' : 'negative'}
           />
-          <StatCard label="Tiền tiết kiệm" value={formatVND(assets.savings)} tone="positive" />
-          <StatCard label="Net Worth" value={formatVND(netWorth)} tone={netWorth >= 0 ? 'positive' : 'negative'} />
+          <StatCard label="Tiền tiết kiệm" value={mask(assets.savings)} tone="positive" />
+          <StatCard label="Net Worth" value={mask(netWorth)} tone={netWorth >= 0 ? 'positive' : 'negative'} />
           <StatCard label="Người khác nợ tôi" value={formatVND(liabilities.debtOwedToMe)} tone="neutral" />
           <StatCard label="Tôi đang nợ" value={formatVND(liabilities.debtIOwe)} tone="negative" />
           <StatCard label="Dư nợ thẻ tín dụng" value={formatVND(liabilities.creditCardDebt)} tone="negative" />
@@ -80,7 +92,11 @@ export default function Dashboard() {
         <h2 className="text-sm font-semibold text-slate-500 mb-3">Chi tiết tài sản</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Object.entries(ACCOUNT_TYPE_LABELS).map(([key, label]) => (
-            <StatCard key={key} label={label} value={formatVND(assets[key] || 0)} />
+            <StatCard
+              key={key}
+              label={label}
+              value={key === 'savings' ? mask(assets[key] || 0) : formatVND(assets[key] || 0)}
+            />
           ))}
         </div>
       </div>
