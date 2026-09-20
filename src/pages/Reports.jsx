@@ -107,12 +107,38 @@ export default function Reports() {
         <div className="card">
           <div className="text-sm font-semibold text-slate-500 mb-3">Chi theo danh mục</div>
           {categoryData.length === 0 ? <div className="text-slate-400 text-sm py-16 text-center">Chưa có dữ liệu chi tiêu.</div> : (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={300}>
               <PieChart>
-                <Pie data={categoryData} dataKey="value" nameKey="name" outerRadius={90} label={(d) => d.name}>
+                <Pie
+                  data={categoryData}
+                  dataKey="value"
+                  nameKey="name"
+                  outerRadius={90}
+                  labelLine={false}
+                  label={({ percent, cx, cy, midAngle, innerRadius, outerRadius }) => {
+                    // Only label slices big enough that the text won't collide
+                    // with its neighbors; small slices rely on the legend instead.
+                    if (percent < 0.06) return null
+                    const RADIAN = Math.PI / 180
+                    const r = innerRadius + (outerRadius - innerRadius) * 0.6
+                    const x = cx + r * Math.cos(-midAngle * RADIAN)
+                    const y = cy + r * Math.sin(-midAngle * RADIAN)
+                    return (
+                      <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={600}>
+                        {(percent * 100).toFixed(0)}%
+                      </text>
+                    )
+                  }}
+                >
                   {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip formatter={(v) => formatVND(v)} />
+                <Legend
+                  layout="vertical"
+                  align="right"
+                  verticalAlign="middle"
+                  wrapperStyle={{ fontSize: 12, lineHeight: '20px' }}
+                />
               </PieChart>
             </ResponsiveContainer>
           )}
