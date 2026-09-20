@@ -13,6 +13,7 @@ export default function Accounts() {
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState(null)
   const [revealed, setRevealed] = useState(new Set())
+  const [showSavingsBalance, setShowSavingsBalance] = useState(false)
 
   function toggleReveal(id) {
     setRevealed((prev) => {
@@ -133,7 +134,18 @@ export default function Accounts() {
         Object.entries(ACCOUNT_TYPE_LABELS).map(([type, label]) => (
           grouped[type]?.length > 0 && (
             <div key={type}>
-              <h2 className="text-sm font-semibold text-slate-500 mb-3">{label}</h2>
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-sm font-semibold text-slate-500">{label}</h2>
+                {type === 'savings' && (
+                  <button
+                    type="button"
+                    className="text-xs text-slate-400 hover:text-slate-600"
+                    onClick={() => setShowSavingsBalance((v) => !v)}
+                  >
+                    {showSavingsBalance ? 'Ẩn số dư' : 'Hiện số dư'}
+                  </button>
+                )}
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {grouped[type].map((a) => (
                   <div key={a.account_id} className="card">
@@ -154,7 +166,9 @@ export default function Accounts() {
                         </button>
                       </div>
                     )}
-                    <div className="text-xl font-semibold mt-1">{formatVND(a.current_balance)}</div>
+                    <div className="text-xl font-semibold mt-1">
+                      {type === 'savings' && !showSavingsBalance ? '••••••••' : formatVND(a.current_balance)}
+                    </div>
                     <div className="flex gap-3 mt-3 text-xs">
                       <button className="text-slate-400 hover:text-blue-600" onClick={() => handleEdit(a)}>Sửa</button>
                       <button className="text-slate-400 hover:text-slate-600" onClick={() => handleToggleActive(a)}>Ngừng dùng</button>
