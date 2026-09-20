@@ -118,7 +118,7 @@ export default function DateTimePicker({ value, onChange, required }) {
       )}
 
       {open && (
-        <div className="absolute z-20 mt-1 w-72 bg-white rounded-lg shadow-lg border border-slate-200 p-3">
+        <div className="card absolute z-20 mt-1 w-80 p-3 shadow-lg">
           <div className="flex items-center justify-between mb-2">
             <button type="button" className="btn-secondary px-2 py-1" onClick={() => goToMonth(-1)}>‹</button>
             <div className="text-sm font-medium">
@@ -146,8 +146,8 @@ export default function DateTimePicker({ value, onChange, required }) {
                     (isSelected
                       ? 'bg-brand-600 text-white font-medium'
                       : inMonth
-                        ? 'hover:bg-slate-100 text-slate-700'
-                        : 'text-slate-300 hover:bg-slate-50') +
+                        ? 'hover:bg-white/10 text-slate-200'
+                        : 'text-slate-600 hover:bg-white/5') +
                     (isToday && !isSelected ? ' ring-1 ring-brand-400' : '')
                   }
                 >
@@ -157,16 +157,16 @@ export default function DateTimePicker({ value, onChange, required }) {
             })}
           </div>
 
-          <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-100">
+          <div className="flex items-center justify-between gap-2 flex-wrap mt-3 pt-3 border-t border-white/10">
             <input
               type="time"
-              className="input py-1"
+              className="input py-1 w-28 shrink-0"
               value={time}
               onChange={(e) => commitTime(e.target.value)}
             />
-            <div className="flex gap-2">
-              <button type="button" className="btn-secondary px-2 py-1 text-sm" onClick={goToToday}>Hôm nay</button>
-              <button type="button" className="btn-primary px-3 py-1 text-sm" onClick={() => setOpen(false)}>Xong</button>
+            <div className="flex gap-2 shrink-0">
+              <button type="button" className="btn-secondary px-2 py-1 text-sm whitespace-nowrap" onClick={goToToday}>Hôm nay</button>
+              <button type="button" className="btn-primary px-3 py-1 text-sm whitespace-nowrap" onClick={() => setOpen(false)}>Xong</button>
             </div>
           </div>
         </div>
