@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { TRANSACTION_TYPE_LABELS } from '../lib/formatters'
+import DateTimePicker from './DateTimePicker'
 
 const TYPE_GROUPS = [
   { value: 'income', label: TRANSACTION_TYPE_LABELS.income },
@@ -146,9 +147,10 @@ export default function TransactionForm({ accounts, categories, creditCards, deb
         </div>
         <div>
           <label className="label">Ngày giờ</label>
-          <input
-            type="datetime-local" required className="input"
-            value={form.occurred_at} onChange={(e) => update({ occurred_at: e.target.value })}
+          <DateTimePicker
+            required
+            value={form.occurred_at}
+            onChange={(v) => update({ occurred_at: v })}
           />
         </div>
 
