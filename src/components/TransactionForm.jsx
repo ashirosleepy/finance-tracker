@@ -25,19 +25,35 @@ const FIELD_MAP = {
   debt_borrow: ['toAccount', 'debt'],
 }
 
-const emptyForm = {
-  type: 'expense',
-  amount: '',
-  occurred_at: new Date().toISOString().slice(0, 16),
-  from_account_id: '',
-  to_account_id: '',
-  category_id: '',
-  credit_card_id: '',
-  debt_id: '',
-  description: '',
-  note: '',
-  adjustment_direction: 'increase',
-  affects_balance: true,
+// Returns "YYYY-MM-DDTHH:mm" in the browser's LOCAL time (what <input type="datetime-local">
+// / DateTimePicker expects). Using toISOString() here would give UTC time instead, which
+// is off by your timezone offset (and can even land on the wrong day).
+function toLocalInputValue(date) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function nowLocal() {
+  return toLocalInputValue(new Date())
+}
+
+// A function (not a static object) so every new-transaction form gets the
+// CURRENT date/time, instead of the moment this module first loaded.
+function getEmptyForm() {
+  return {
+    type: 'expense',
+    amount: '',
+    occurred_at: nowLocal(),
+    from_account_id: '',
+    to_account_id: '',
+    category_id: '',
+    credit_card_id: '',
+    debt_id: '',
+    description: '',
+    note: '',
+    adjustment_direction: 'increase',
+    affects_balance: true,
+  }
 }
 
 // Converts a transaction row (as returned by getTransactions, with amount as
@@ -46,7 +62,7 @@ function toFormState(tx) {
   return {
     type: tx.type,
     amount: String(tx.amount ?? ''),
-    occurred_at: tx.occurred_at ? new Date(tx.occurred_at).toISOString().slice(0, 16) : emptyForm.occurred_at,
+    occurred_at: tx.occurred_at ? toLocalInputValue(new Date(tx.occurred_at)) : nowLocal(),
     from_account_id: tx.from_account_id || '',
     to_account_id: tx.to_account_id || '',
     category_id: tx.category_id || '',
@@ -64,13 +80,13 @@ function toFormState(tx) {
 // creating a new one. onSubmit(payload, id) receives the transaction's id
 // as the second argument when editing, or undefined when creating.
 export default function TransactionForm({ accounts, categories, creditCards, debts, userId, onSubmit, onCancel, initialData }) {
-  const [form, setForm] = useState(() => (initialData ? toFormState(initialData) : emptyForm))
+  const [form, setForm] = useState(() => (initialData ? toFormState(initialData) : getEmptyForm()))
   const [saving, setSaving] = useState(false)
   const isEditing = Boolean(initialData)
   const fields = FIELD_MAP[form.type] || []
 
   useEffect(() => {
-    setForm(initialData ? toFormState(initialData) : emptyForm)
+    setForm(initialData ? toFormState(initialData) : getEmptyForm())
   }, [initialData])
 
   function update(patch) {
@@ -111,7 +127,7 @@ export default function TransactionForm({ accounts, categories, creditCards, deb
         await onSubmit(payload, initialData.id)
       } else {
         await onSubmit(payload)
-        setForm(emptyForm)
+        setForm(getEmptyForm())
       }
     } finally {
       setSaving(false)
