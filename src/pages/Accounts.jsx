@@ -12,6 +12,15 @@ export default function Accounts() {
   const [form, setForm] = useState(emptyForm)
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState(null)
+  const [revealed, setRevealed] = useState(new Set())
+
+  function toggleReveal(id) {
+    setRevealed((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   async function load() {
     setLoading(true)
@@ -22,23 +31,17 @@ export default function Accounts() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    const payload = {
+      name: form.name,
+      type: form.type,
+      account_number: form.account_number.trim() || null,
+      opening_balance: Number(form.opening_balance) || 0,
+      note: form.note || null,
+    }
     if (editingId) {
-      await updateAccount(editingId, {
-        name: form.name,
-        type: form.type,
-        account_number: form.account_number || null,
-        opening_balance: Number(form.opening_balance) || 0,
-        note: form.note || null,
-      })
+      await updateAccount(editingId, payload)
     } else {
-      await createAccount({
-        user_id: user.id,
-        name: form.name,
-        type: form.type,
-        account_number: form.account_number || null,
-        opening_balance: Number(form.opening_balance) || 0,
-        note: form.note || null,
-      })
+      await createAccount({ user_id: user.id, ...payload })
     }
     setForm(emptyForm); setShowForm(false); setEditingId(null)
     await load()
@@ -135,10 +138,26 @@ export default function Accounts() {
                 {grouped[type].map((a) => (
                   <div key={a.account_id} className="card">
                     <div className="font-medium">{a.name}</div>
+                    {a.account_number && (
+                      <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
+                        <span>
+                          {revealed.has(a.account_id)
+                            ? a.account_number
+                            : '•••• ' + a.account_number.slice(-4)}
+                        </span>
+                        <button
+                          type="button"
+                          className="text-slate-300 hover:text-slate-500"
+                          onClick={() => toggleReveal(a.account_id)}
+                        >
+                          {revealed.has(a.account_id) ? 'Ẩn số' : 'Hiện số'}
+                        </button>
+                      </div>
+                    )}
                     <div className="text-xl font-semibold mt-1">{formatVND(a.current_balance)}</div>
                     <div className="flex gap-3 mt-3 text-xs">
                       <button className="text-slate-400 hover:text-blue-600" onClick={() => handleEdit(a)}>Sửa</button>
-                      <button className="text-slate-400 hover:text-slate-600" onClick={() => handleToggleActive(a)}>Ẩn</button>
+                      <button className="text-slate-400 hover:text-slate-600" onClick={() => handleToggleActive(a)}>Ngừng dùng</button>
                       <button className="text-slate-400 hover:text-red-600" onClick={() => handleDelete(a)}>Xóa</button>
                     </div>
                   </div>

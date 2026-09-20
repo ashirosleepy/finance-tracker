@@ -10,11 +10,24 @@ export async function getAccounts() {
 }
 
 // Balances come from the `account_balances` view (computed from transactions),
-// never from a stored column.
+// never from a stored column. The view doesn't carry every column on
+// `accounts` (e.g. account_number, note), so merge those in from the base
+// table — otherwise the edit form for an account loses them on save.
 export async function getAccountBalances() {
-  const { data, error } = await supabase.from('account_balances').select('*')
-  if (error) throw error
-  return data
+  const [{ data: balances, error: balErr }, { data: accounts, error: accErr }] = await Promise.all([
+    supabase.from('account_balances').select('*'),
+    supabase.from('accounts').select('id, account_number, note'),
+  ])
+  if (balErr) throw balErr
+  if (accErr) throw accErr
+
+  const extrasById = new Map(accounts.map((a) => [a.id, a]))
+  return balances.map((b) => {
+    const extra = extrasById.get(b.account_id)
+    return extra
+      ? { ...b, account_number: extra.account_number, note: extra.note }
+      : b
+  })
 }
 
 export async function createAccount(account) {
