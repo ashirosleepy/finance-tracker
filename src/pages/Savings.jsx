@@ -13,6 +13,9 @@ export default function Savings() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState(null)
+  const [showAmounts, setShowAmounts] = useState(false)
+
+  const mask = (value) => (showAmounts ? formatVND(value) : '••••••••')
 
   async function load() {
     const ab = await getAccountBalances()
@@ -63,17 +66,26 @@ export default function Savings() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Tiết kiệm</h1>
-        <button
-          className="btn-primary"
-          onClick={() => (showForm ? handleCancelForm() : (setForm(emptyForm), setEditingId(null), setShowForm(true)))}
-        >
-          {showForm ? 'Đóng' : '+ Thêm mục tiêu'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="text-xs text-slate-400 hover:text-slate-600"
+            onClick={() => setShowAmounts((v) => !v)}
+          >
+            {showAmounts ? 'Ẩn số tiền' : 'Hiện số tiền'}
+          </button>
+          <button
+            className="btn-primary"
+            onClick={() => (showForm ? handleCancelForm() : (setForm(emptyForm), setEditingId(null), setShowForm(true)))}
+          >
+            {showForm ? 'Đóng' : '+ Thêm mục tiêu'}
+          </button>
+        </div>
       </div>
 
       <div className="card">
         <div className="text-sm text-slate-500">Tổng tiền tiết kiệm</div>
-        <div className="text-2xl font-semibold mt-1">{formatVND(totalAssetsAllTypes)}</div>
+        <div className="text-2xl font-semibold mt-1">{mask(totalAssetsAllTypes)}</div>
         <p className="text-xs text-slate-400 mt-2">
           Để đưa tiền vào/lấy ra khỏi tiết kiệm, dùng loại giao dịch "Chuyển tiền" ở trang Giao dịch —
           thao tác này không được tính là chi tiêu.
@@ -114,7 +126,7 @@ export default function Savings() {
           {accounts.length === 0 ? <div className="text-slate-400 text-sm">Chưa có tài khoản tiết kiệm nào.</div> : accounts.map((a) => (
             <div key={a.account_id} className="card">
               <div className="font-medium">{a.name}</div>
-              <div className="text-xl font-semibold mt-1">{formatVND(a.current_balance)}</div>
+              <div className="text-xl font-semibold mt-1">{mask(a.current_balance)}</div>
             </div>
           ))}
         </div>
@@ -130,7 +142,7 @@ export default function Savings() {
                   <div className="font-medium">{g.name}</div>
                   <button className="text-xs text-slate-400 hover:text-blue-600" onClick={() => handleEdit(g)}>Sửa</button>
                 </div>
-                {g.target_amount && <div className="text-sm text-slate-500 mt-1">Mục tiêu: {formatVND(g.target_amount)}</div>}
+                {g.target_amount && <div className="text-sm text-slate-500 mt-1">Mục tiêu: {mask(g.target_amount)}</div>}
                 {g.target_date && <div className="text-xs text-slate-400">Hạn: {formatDate(g.target_date)}</div>}
               </div>
             ))}
