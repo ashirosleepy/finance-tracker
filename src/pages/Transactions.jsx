@@ -43,14 +43,40 @@ export default function Transactions() {
   useEffect(() => { loadTransactions() }, [filters])
 
   async function handleSubmit(payload, id) {
-    if (id) {
-      await updateTransaction(id, payload)
-    } else {
-      await createTransaction(payload)
-    }
     setShowForm(false)
     setEditingTransaction(null)
-    await loadTransactions()
+
+    if (id) {
+      // Optimistic update: patch the row in place immediately
+      const previous = transactions
+      setTransactions((list) => list.map((t) => (t.id === id ? { ...t, ...payload } : t)))
+      try {
+        const updated = await updateTransaction(id, payload)
+        if (updated) {
+          setTransactions((list) => list.map((t) => (t.id === id ? updated : t)))
+        }
+      } catch (err) {
+        setTransactions(previous) // rollback on failure
+        alert('Không thể cập nhật giao dịch. Vui lòng thử lại.')
+        throw err
+      }
+      // Balances (accounts/cards/debts) depend on server-side calc, refresh quietly
+      loadAll()
+    } else {
+      // Optimistic create: show a temporary row right away
+      const tempId = `temp-${Date.now()}`
+      const optimisticTx = { ...payload, id: tempId, _optimistic: true }
+      setTransactions((list) => [optimisticTx, ...list])
+      try {
+        const created = await createTransaction(payload)
+        setTransactions((list) => list.map((t) => (t.id === tempId ? created : t)))
+      } catch (err) {
+        setTransactions((list) => list.filter((t) => t.id !== tempId)) // rollback on failure
+        alert('Không thể thêm giao dịch. Vui lòng thử lại.')
+        throw err
+      }
+      loadAll()
+    }
   }
 
   function handleEdit(tx) {
@@ -65,8 +91,15 @@ export default function Transactions() {
 
   async function handleDelete(id) {
     if (!confirm('Xóa giao dịch này? Số dư liên quan sẽ tự động cập nhật lại.')) return
-    await deleteTransaction(id)
-    await loadTransactions()
+    const previous = transactions
+    setTransactions((list) => list.filter((t) => t.id !== id)) // optimistic remove
+    try {
+      await deleteTransaction(id)
+      loadAll()
+    } catch (err) {
+      setTransactions(previous) // rollback on failure
+      alert('Không thể xóa giao dịch. Vui lòng thử lại.')
+    }
   }
 
   return (
