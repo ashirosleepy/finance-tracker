@@ -124,10 +124,10 @@ export default function TransactionTable({ transactions, onDelete, onEdit }) {
             <tr className="text-left text-slate-400 border-b border-slate-100 dark:border-slate-800">
               <th className="py-2 pr-3">Ngày</th>
               <th className="py-2 pr-3">Loại</th>
-              <th className="py-2 pr-3">Mô tả</th>
+              <th className="py-2 pr-3 max-w-[280px]">Mô tả</th>
               <th className="py-2 pr-3">Tài khoản</th>
               <th className="py-2 pr-3 text-right">Số tiền</th>
-              <th className="py-2 pl-3"></th>
+              <th className="py-2 pl-3 w-[110px]"></th>
             </tr>
           </thead>
           <tbody>
@@ -151,11 +151,13 @@ export default function TransactionTable({ transactions, onDelete, onEdit }) {
                     <tr key={t.id} className="border-b border-slate-50 last:border-0 dark:border-slate-800">
                       <td className="py-2 pr-3 whitespace-nowrap text-slate-500">{formatDateTime(t.occurred_at)}</td>
                       <td className="py-2 pr-3 whitespace-nowrap">{TRANSACTION_TYPE_LABELS[t.type]}</td>
-                      <td className="py-2 pr-3">
-                        {t.description}
-                        {t.category?.name && <span className="text-slate-400"> · {t.category.name}</span>}
+                      <td className="py-2 pr-3 max-w-[280px]">
+                        <div className="truncate" title={t.description || ''}>
+                          {t.description}
+                          {t.category?.name && <span className="text-slate-400"> · {t.category.name}</span>}
+                        </div>
                         {t.affects_balance === false && (
-                          <span className="ml-2 text-xs text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/30 rounded px-1.5 py-0.5">
+                          <span className="text-xs text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/30 rounded px-1.5 py-0.5 inline-block mt-0.5">
                             Không tính vào số dư
                           </span>
                         )}
@@ -166,7 +168,7 @@ export default function TransactionTable({ transactions, onDelete, onEdit }) {
                       <td className={`py-2 pr-3 text-right font-medium whitespace-nowrap ${color}`}>
                         {sign}{formatVND(t.amount)}
                       </td>
-                      <td className="py-2 pl-3 text-right whitespace-nowrap">
+                      <td className="py-2 pl-3 text-right whitespace-nowrap w-[110px]">
                         <button className="text-sm text-slate-400 hover:text-brand-600 mr-3" onClick={() => onEdit?.(t)}>
                           Sửa
                         </button>

@@ -5,6 +5,19 @@ import { formatVND, formatDate, DEBT_STATUS_LABELS } from '../lib/formatters'
 
 const emptyForm = { direction: 'owed_to_me', person_name: '', principal_amount: '', due_date: '', note: '' }
 
+// Formats a raw numeric string for display with '.' as thousand separators (e.g. "22000000" -> "22.000.000").
+// Keeps the underlying state as plain digits so Number(...) elsewhere still works unchanged.
+function formatAmountInput(value) {
+  const digits = String(value ?? '').replace(/\D/g, '')
+  if (!digits) return ''
+  return Number(digits).toLocaleString('vi-VN')
+}
+
+// Strips everything but digits, so typed '.', ',' or spaces don't end up in the stored value.
+function parseAmountInput(value) {
+  return String(value ?? '').replace(/\D/g, '')
+}
+
 export default function Debts() {
   const { user } = useAuth()
   const [debts, setDebts] = useState([])
@@ -48,6 +61,10 @@ export default function Debts() {
 
   async function handleRecordPayment(e) {
     e.preventDefault()
+    if (Number(payAmount) > payingDebt.remaining_amount) {
+      alert(`Số tiền không được vượt quá ${formatVND(payingDebt.remaining_amount)}`)
+      return
+    }
     await recordDebtPayment({
       userId: user.id, debt: payingDebt, amount: Number(payAmount), accountId: payAccount,
     })
@@ -147,7 +164,17 @@ export default function Debts() {
           </div>
           <div>
             <label className="label">Số tiền (₫)</label>
-            <input type="number" required className="input" value={form.principal_amount} onChange={(e) => setForm({ ...form, principal_amount: e.target.value })} />
+            <div className="relative">
+              <input
+                type="text"
+                inputMode="numeric"
+                required
+                className="input pr-8"
+                value={formatAmountInput(form.principal_amount)}
+                onChange={(e) => setForm({ ...form, principal_amount: parseAmountInput(e.target.value) })}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none">₫</span>
+            </div>
           </div>
           <div>
             <label className="label">Hạn trả (tùy chọn)</label>
@@ -175,7 +202,17 @@ export default function Debts() {
           </div>
           <div>
             <label className="label">Số tiền (₫)</label>
-            <input type="number" required max={payingDebt.remaining_amount} className="input" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+            <div className="relative">
+              <input
+                type="text"
+                inputMode="numeric"
+                required
+                className="input pr-8"
+                value={formatAmountInput(payAmount)}
+                onChange={(e) => setPayAmount(parseAmountInput(e.target.value))}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none">₫</span>
+            </div>
           </div>
           <div>
             <label className="label">Tài khoản</label>
@@ -202,7 +239,17 @@ export default function Debts() {
           </div>
           <div>
             <label className="label">Số tiền gốc (₫)</label>
-            <input type="number" required className="input" value={editForm.principal_amount} onChange={(e) => setEditForm({ ...editForm, principal_amount: e.target.value })} />
+            <div className="relative">
+              <input
+                type="text"
+                inputMode="numeric"
+                required
+                className="input pr-8"
+                value={formatAmountInput(editForm.principal_amount)}
+                onChange={(e) => setEditForm({ ...editForm, principal_amount: parseAmountInput(e.target.value) })}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none">₫</span>
+            </div>
           </div>
           <div>
             <label className="label">Hạn trả (tùy chọn)</label>
