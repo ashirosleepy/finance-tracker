@@ -146,6 +146,7 @@ export default function Reports() {
                         transform={`rotate(${rotateDeg} ${x} ${y})`}
                         fill="#fff" textAnchor="middle" dominantBaseline="central"
                         fontSize={fontSize} fontWeight={600}
+                        stroke="#000" strokeWidth={3} strokeLinejoin="round" paintOrder="stroke"
                       >
                         {(percent * 100).toFixed(0)}%
                       </text>
