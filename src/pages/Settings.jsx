@@ -52,22 +52,70 @@ export default function Settings() {
     try {
       const text = await file.text()
       const data = JSON.parse(text)
+
+      // Tài khoản đã có sẵn trong DB (khớp theo tên, không phân biệt hoa/thường
+      // và khoảng trắng thừa) — dùng để tránh tạo trùng khi file import có "accounts".
+      const existingAccounts = await getAccounts()
+      const existingByName = new Map(
+        existingAccounts.map((a) => [a.name.trim().toLowerCase(), a.id])
+      )
+
+      // accountIdMap: id trong file -> id thật trong DB.
+      // Mặc định ánh xạ mỗi tài khoản hiện có về chính nó, để những giao dịch
+      // tham chiếu thẳng tới id tài khoản đã tồn tại (không kèm mảng "accounts")
+      // vẫn được giữ nguyên thay vì bị rơi về null.
       const accountIdMap = {}
+      for (const a of existingAccounts) accountIdMap[a.id] = a.id
+
       for (const a of data.accounts || []) {
-        const created = await createAccount({
-          user_id: user.id, name: a.name, type: a.type, opening_balance: a.opening_balance || a.current_balance || 0, note: a.note,
-        })
-        accountIdMap[a.id || a.account_id] = created.id
+        const key = (a.name || '').trim().toLowerCase()
+        const existingId = existingByName.get(key)
+        if (existingId) {
+          // Tài khoản cùng tên đã tồn tại -> dùng lại, KHÔNG tạo mới.
+          accountIdMap[a.id || a.account_id] = existingId
+        } else {
+          const created = await createAccount({
+            user_id: user.id, name: a.name, type: a.type,
+            opening_balance: a.opening_balance || a.current_balance || 0, note: a.note,
+          })
+          accountIdMap[a.id || a.account_id] = created.id
+          existingByName.set(key, created.id)
+        }
       }
-      for (const t of data.transactions || []) {
-        await createTransaction({
-          user_id: user.id, type: t.type, amount: t.amount, occurred_at: t.occurred_at,
-          from_account_id: accountIdMap[t.from_account_id] || null,
-          to_account_id: accountIdMap[t.to_account_id] || null,
-          description: t.description, note: t.note,
-        })
+
+      let okCount = 0
+      const errors = []
+      for (const [i, t] of (data.transactions || []).entries()) {
+        try {
+          await createTransaction({
+            user_id: user.id,
+            type: t.type,
+            amount: t.amount,
+            occurred_at: t.occurred_at,
+            // Nếu id trong file không nằm trong map (không được remap và cũng
+            // không khớp tài khoản có sẵn) thì fallback về chính id đó thay vì
+            // null, phòng trường hợp file chỉ chứa transactions tham chiếu
+            // thẳng tới account_id/category_id đã có sẵn trong DB.
+            from_account_id: t.from_account_id ? (accountIdMap[t.from_account_id] || t.from_account_id) : null,
+            to_account_id: t.to_account_id ? (accountIdMap[t.to_account_id] || t.to_account_id) : null,
+            category_id: t.category_id || null,
+            credit_card_id: t.credit_card_id || null,
+            debt_id: t.debt_id || null,
+            description: t.description,
+            note: t.note,
+            affects_balance: t.affects_balance ?? true,
+          })
+          okCount++
+        } catch (rowErr) {
+          errors.push(`dòng ${i + 1}: ${rowErr.message}`)
+        }
       }
-      setStatus('Import thành công!')
+      const total = (data.transactions || []).length
+      if (errors.length === 0) {
+        setStatus(`Import thành công! Đã thêm ${okCount}/${total} giao dịch.`)
+      } else {
+        setStatus(`Đã thêm ${okCount}/${total} giao dịch. Lỗi ${errors.length} dòng: ${errors.slice(0, 3).join(' | ')}${errors.length > 3 ? ' ...' : ''}`)
+      }
     } catch (err) {
       setStatus('Lỗi import: ' + err.message)
     }
