@@ -19,6 +19,7 @@ export default function Transactions() {
   const [editingTransaction, setEditingTransaction] = useState(null)
   const [filters, setFilters] = useState({ type: '', accountId: '', categoryId: '', search: '' })
   const [loading, setLoading] = useState(true)
+  const hasActiveFilters = Object.values(filters).some(Boolean)
 
   async function loadAll() {
     const [acc, cat, cc, dt] = await Promise.all([
@@ -104,10 +105,10 @@ export default function Transactions() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Giao dịch</h1>
         <button
-          className="btn-primary"
+          className="btn-primary px-3 py-2 text-sm sm:px-4 sm:text-base"
           onClick={() => {
             if (showForm) handleCloseForm()
             else setShowForm(true)
@@ -125,23 +126,31 @@ export default function Transactions() {
         />
       )}
 
-      <div className="card flex flex-wrap gap-3">
+      <div className="card grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
         <input
-          className="input max-w-xs" placeholder="Tìm theo mô tả..."
+          className="input col-span-2 py-2.5 sm:col-span-1 sm:max-w-xs" placeholder="Tìm theo mô tả..."
           value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
         />
-        <select className="input max-w-[180px]" value={filters.type} onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value }))}>
+        <select className="input py-2.5 sm:max-w-[160px]" value={filters.type} onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value }))}>
           <option value="">Tất cả loại</option>
           {Object.entries(TRANSACTION_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
-        <select className="input max-w-[180px]" value={filters.accountId} onChange={(e) => setFilters((f) => ({ ...f, accountId: e.target.value }))}>
+        <select className="input py-2.5 sm:max-w-[160px]" value={filters.accountId} onChange={(e) => setFilters((f) => ({ ...f, accountId: e.target.value }))}>
           <option value="">Tất cả tài khoản</option>
           {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <select className="input max-w-[180px]" value={filters.categoryId} onChange={(e) => setFilters((f) => ({ ...f, categoryId: e.target.value }))}>
+        <select className="input py-2.5 sm:max-w-[160px]" value={filters.categoryId} onChange={(e) => setFilters((f) => ({ ...f, categoryId: e.target.value }))}>
           <option value="">Tất cả danh mục</option>
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        {hasActiveFilters && (
+          <button
+            onClick={() => setFilters({ type: '', accountId: '', categoryId: '', search: '' })}
+            className="col-span-2 sm:col-span-1 py-2 text-sm text-slate-500 hover:text-slate-700 underline underline-offset-2"
+          >
+            Xóa lọc
+          </button>
+        )}
       </div>
 
       {loading ? <div className="text-slate-400">Đang tải...</div> : (
