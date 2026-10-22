@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useAuth } from '../context/AuthContext'
-import {
-  getAccounts, getInstallmentPlans, getInstallmentPayments, payInstallment, deleteInstallmentPlan,
-} from '../lib/queries'
+import { getInstallmentPlans, getInstallmentPayments, deleteInstallmentPlan } from '../lib/queries'
 import { installmentStatus, installmentsDueInMonth, localISO } from '../lib/calculations'
+import { billForDueDate, SHOPEE_STATEMENT_DAY, SHOPEE_DUE_DAY } from '../lib/shopeeBill'
 import { formatVND, formatDate } from '../lib/formatters'
 
 const INSTALLMENT_STATUS_LABELS = {
@@ -30,21 +28,17 @@ const PLAN_STYLE = {
   completed: STATUS_STYLE.paid,
 }
 
+// Trang này chỉ theo dõi. Các kỳ trả góp được thanh toán cùng hóa đơn tháng
+// (xem "Shopee trả sau" → Xem hóa đơn), không thanh toán lẻ từng kỳ.
 export default function Installments() {
-  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [plans, setPlans] = useState([])
   const [payments, setPayments] = useState([])
-  const [accounts, setAccounts] = useState([])
-  const [payFrom, setPayFrom] = useState('')
   const [openId, setOpenId] = useState(null)
-  const [busyId, setBusyId] = useState(null)
 
   async function load() {
-    const [pl, pa, ac] = await Promise.all([getInstallmentPlans(), getInstallmentPayments(), getAccounts()])
-    const spendable = ac.filter((a) => a.type !== 'savings')
-    setPlans(pl); setPayments(pa); setAccounts(spendable)
-    setPayFrom((prev) => prev || spendable[0]?.id || '')
+    const [pl, pa] = await Promise.all([getInstallmentPlans(), getInstallmentPayments()])
+    setPlans(pl); setPayments(pa)
     setLoading(false)
   }
   useEffect(() => { load() }, [])
@@ -61,20 +55,6 @@ export default function Installments() {
   const dueThisMonth = installmentsDueInMonth(unpaid)
   const overdueTotal = overdueList.reduce((s, p) => s + Number(p.amount), 0)
 
-  async function handlePay(plan, payment) {
-    if (!payFrom) { alert('Hãy chọn tài khoản để trừ tiền.'); return }
-    if (!confirm(`Xác nhận đã thanh toán kỳ ${payment.period_no}/${plan.months} (${formatVND(payment.amount)})?`)) return
-    setBusyId(payment.id)
-    try {
-      await payInstallment({ userId: user.id, plan, payment, accountId: payFrom })
-      await load()
-    } catch (err) {
-      alert('Không ghi nhận được thanh toán: ' + (err.message || err))
-    } finally {
-      setBusyId(null)
-    }
-  }
-
   async function handleDeletePlan(plan) {
     if (!confirm(`Xóa kế hoạch "${plan.name}"? Giao dịch mua và các khoản đã trả của kế hoạch này cũng bị xóa (số dư tài khoản sẽ được hoàn lại).`)) return
     await deleteInstallmentPlan(plan.plan_id)
@@ -89,6 +69,7 @@ export default function Installments() {
       <h1 className="text-xl font-semibold">Trả góp</h1>
       <p className="text-sm text-slate-400">
         Tạo khoản trả góp mới ở trang "Giao dịch": chọn loại "Mua bằng Shopee trả sau" rồi bật "Trả góp theo tháng".
+        Mỗi kỳ trả góp nằm trong hóa đơn tháng tương ứng và được thanh toán cùng hóa đơn đó.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -101,10 +82,10 @@ export default function Installments() {
           <div className={`text-lg font-semibold mt-1 ${overdueTotal > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>{formatVND(overdueTotal)}</div>
         </div>
         <div className="card">
-          <label className="label">Trừ tiền từ tài khoản</label>
-          <select className="input" value={payFrom} onChange={(e) => setPayFrom(e.target.value)}>
-            {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
+          <div className="text-sm text-slate-500">Cách thanh toán</div>
+          <div className="text-sm mt-1">
+            Hóa đơn chốt ngày {SHOPEE_STATEMENT_DAY}, hạn trả ngày {SHOPEE_DUE_DAY} tháng sau. Trả cả hóa đơn một lần.
+          </div>
         </div>
       </div>
 
@@ -135,7 +116,7 @@ export default function Installments() {
                   <span className="font-medium">Còn lại {formatVND(plan.remaining_amount)}</span>
                 </div>
                 {plan.next_due_date && (
-                  <div className="text-xs text-slate-400 mt-1">Kỳ tiếp theo: {formatDate(plan.next_due_date)}</div>
+                  <div className="text-xs text-slate-400 mt-1">Kỳ tiếp theo: hạn trả {formatDate(plan.next_due_date)}</div>
                 )}
 
                 <div className="flex gap-4 mt-3">
@@ -149,30 +130,25 @@ export default function Installments() {
                   <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
                     {rows.map((p) => {
                       const st = installmentStatus(p, today)
+                      const bill = billForDueDate(p.due_date)
                       return (
                         <div key={p.id} className="flex items-center justify-between gap-3 text-sm">
                           <div className="min-w-0">
-                            <div>Kỳ {p.period_no}/{plan.months} · {formatDate(p.due_date)}</div>
+                            <div>Kỳ {p.period_no}/{plan.months} · hóa đơn tháng {bill.month}/{bill.year}</div>
                             <div className="text-xs text-slate-400">
-                              Gốc {formatVND(p.principal_amount)}{Number(p.fee_amount) > 0 && ` + phí ${formatVND(p.fee_amount)}`}
+                              Hạn trả {formatDate(p.due_date)} · Gốc {formatVND(p.principal_amount)}{Number(p.fee_amount) > 0 && ` + phí ${formatVND(p.fee_amount)}`}
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             <span className="font-medium whitespace-nowrap">{formatVND(p.amount)}</span>
                             <span className={`text-xs rounded px-2 py-0.5 whitespace-nowrap ${STATUS_STYLE[st]}`}>{INSTALLMENT_STATUS_LABELS[st]}</span>
-                            {!p.paid_at && (
-                              <button
-                                className="btn-secondary text-xs"
-                                disabled={busyId === p.id}
-                                onClick={() => handlePay(plan, p)}
-                              >
-                                {busyId === p.id ? '...' : 'Đã thanh toán'}
-                              </button>
-                            )}
                           </div>
                         </div>
                       )
                     })}
+                    <div className="text-xs text-slate-400 pt-1">
+                      Muốn trả kỳ nào, hãy thanh toán hóa đơn tháng chứa kỳ đó ở trang "Shopee trả sau".
+                    </div>
                   </div>
                 )}
               </div>

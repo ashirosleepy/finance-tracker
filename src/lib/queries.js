@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient'
 import { localISO } from './calculations'
+import { billForDate, billForDueDate, addBillMonths } from './shopeeBill'
 
 // ---------------------------------------------------------------------------
 // Accounts
@@ -361,13 +362,16 @@ export async function getInstallmentPayments({ planId, unpaidOnly } = {}) {
 }
 
 // Tạo kế hoạch + các kỳ + giao dịch "mua bằng trả sau" (ghi nhận chi tiêu, chưa trừ tiền thật).
+// Kỳ 1 nằm trong hóa đơn chứa ngày mua (hạn trả ngày 10 tháng sau ngày chốt), các kỳ sau mỗi
+// tháng một hóa đơn. firstDueDate (nếu có) được đưa về ngày 10 gần nhất phía sau.
 // Phần dư do làm tròn dồn vào kỳ cuối.
 export async function createInstallmentPlan({
   userId, bnplAccountId, name, totalAmount, months, feeTotal = 0,
   firstDueDate, occurredAt, categoryId = null, note = null,
 }) {
   const purchaseDate = occurredAt ? new Date(occurredAt) : new Date()
-  const first = firstDueDate || addMonthsISO(localISO(purchaseDate), 1)
+  const firstBill = firstDueDate ? billForDueDate(firstDueDate) : billForDate(localISO(purchaseDate))
+  const first = firstBill.dueDate
   const total = Number(totalAmount)
   const fee = Number(feeTotal) || 0
 
@@ -385,7 +389,7 @@ export async function createInstallmentPlan({
     const last = i === months - 1
     return {
       user_id: userId, plan_id: plan.id, period_no: i + 1,
-      due_date: addMonthsISO(first, i),
+      due_date: addBillMonths(firstBill, i).dueDate,
       principal_amount: last ? total - principalBase * (months - 1) : principalBase,
       fee_amount: last ? fee - feeBase * (months - 1) : feeBase,
     }
@@ -410,24 +414,49 @@ export async function createInstallmentPlan({
   return plan
 }
 
-// Ghi nhận đã trả 1 kỳ: tạo giao dịch trừ tiền từ tài khoản thật + đánh dấu kỳ đã trả.
-export async function payInstallment({ userId, plan, payment, accountId }) {
+// ---------------------------------------------------------------------------
+// Hóa đơn theo kỳ (chốt ngày 24, hạn 10 tháng sau, trả cả hóa đơn một lần)
+// ---------------------------------------------------------------------------
+// Các hóa đơn ĐÃ thanh toán của một hạn mức (mỗi dòng bnpl_bills = một hóa đơn đã trả).
+export async function getBnplBills(bnplAccountId) {
+  const { data, error } = await supabase.from('bnpl_bills').select('*').eq('bnpl_account_id', bnplAccountId)
+  if (error) throw error
+  return data
+}
+
+// Thanh toán cả hóa đơn: 1 giao dịch bnpl_payment trừ tiền tài khoản thật,
+// 1 dòng bnpl_bills đánh dấu đã trả, và đánh dấu các kỳ trả góp trong hóa đơn là đã trả.
+// bill = một phần tử của buildBnplBills(). Lỗi ở bước nào thì hoàn tác các bước trước.
+export async function payBill({ userId, account, bill, accountId }) {
+  if (bill.paid || bill.payable <= 0) throw new Error('Hóa đơn này không còn khoản nào cần thanh toán.')
+  const installmentIds = bill.items.filter((i) => i.kind === 'installment' && !i.paid).map((i) => i.refId)
+  const paidAt = new Date().toISOString()
+
   const { data: tx, error: txErr } = await supabase.from('transactions').insert({
-    user_id: userId, type: 'bnpl_payment', amount: payment.amount,
-    from_account_id: accountId,
-    bnpl_account_id: plan.bnpl_account_id,
-    installment_plan_id: plan.plan_id,
-    installment_payment_id: payment.id,
-    description: `Trả góp ${plan.name} (kỳ ${payment.period_no}/${plan.months})`,
+    user_id: userId, type: 'bnpl_payment', amount: bill.payable,
+    from_account_id: accountId, bnpl_account_id: account.bnpl_id,
+    description: `Thanh toán hóa đơn Shopee trả sau tháng ${bill.month}/${bill.year}`,
   }).select().single()
   if (txErr) throw txErr
 
-  const { error: upErr } = await supabase.from('installment_payments')
-    .update({ paid_at: new Date().toISOString(), transaction_id: tx.id })
-    .eq('id', payment.id)
-  if (upErr) {
-    await supabase.from('transactions').delete().eq('id', tx.id) // hoàn tác
-    throw upErr
+  const { data: billRow, error: billErr } = await supabase.from('bnpl_bills').insert({
+    user_id: userId, bnpl_account_id: account.bnpl_id, bill_key: bill.key,
+    paid_at: paidAt, paid_amount: bill.payable, transaction_id: tx.id,
+  }).select().single()
+  if (billErr) {
+    await supabase.from('transactions').delete().eq('id', tx.id)
+    throw billErr
+  }
+
+  if (installmentIds.length > 0) {
+    const { error: upErr } = await supabase.from('installment_payments')
+      .update({ paid_at: paidAt, transaction_id: tx.id })
+      .in('id', installmentIds)
+    if (upErr) {
+      await supabase.from('bnpl_bills').delete().eq('id', billRow.id)
+      await supabase.from('transactions').delete().eq('id', tx.id)
+      throw upErr
+    }
   }
   return tx
 }

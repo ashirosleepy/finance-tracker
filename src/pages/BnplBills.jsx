@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getTransactions, getInstallmentPayments, getBnplBills, payBill } from '../lib/queries'
 import { buildBnplBills, localISO } from '../lib/calculations'
+import { SHOPEE_STATEMENT_DAY, SHOPEE_DUE_DAY } from '../lib/shopeeBill'
 import { formatVND, formatDate } from '../lib/formatters'
 
 // Hóa đơn theo kỳ của một hạn mức Shopee trả sau.
+// Mỗi tháng một hóa đơn: chốt ngày 24, hạn trả ngày 10 tháng sau, trả cả hóa đơn một lần.
 // account: một dòng của bnpl_balances. spendable: tài khoản thật dùng để trả.
 export default function BnplBills({ account, userId, spendable, onChanged }) {
   const [tab, setTab] = useState('unpaid')
@@ -34,7 +36,7 @@ export default function BnplBills({ account, userId, spendable, onChanged }) {
 
   async function handlePay(bill) {
     if (!from) { alert('Hãy chọn tài khoản để trừ tiền.'); return }
-    if (!confirm(`Xác nhận đã thanh toán hóa đơn tháng ${bill.month}/${bill.year} (${formatVND(bill.payable)})?`)) return
+    if (!confirm(`Thanh toán toàn bộ hóa đơn tháng ${bill.month}/${bill.year} (${formatVND(bill.payable)})?`)) return
     setBusy(true)
     try {
       await payBill({ userId, account, bill, accountId: from })
@@ -66,16 +68,18 @@ export default function BnplBills({ account, userId, spendable, onChanged }) {
         <div className="space-y-3">
           {list.map((b) => {
             const open = openKey === b.key
+            const closed = today > b.statementDate          // đã chốt kỳ (sau ngày 24)
             const overdue = !b.paid && b.dueDate < today
             return (
               <div key={b.key} className="rounded-lg border border-slate-100 dark:border-slate-800 p-3">
                 <button className="w-full flex items-start justify-between gap-3 text-left" onClick={() => setOpenKey(open ? null : b.key)}>
                   <div className="min-w-0">
-                    <div className="font-medium">tháng {b.month}</div>
+                    <div className="font-medium">Hóa đơn tháng {b.month}/{b.year}</div>
                     <div className="text-xs text-slate-400">
-                      Hóa đơn ngày {formatDate(b.statementDate)}, trả trễ nhất {formatDate(b.dueDate)}
+                      Chốt ngày {formatDate(b.statementDate)} · hạn trả {formatDate(b.dueDate)}
                     </div>
                     {overdue && <span className="text-xs text-red-600 dark:text-red-400">Quá hạn</span>}
+                    {!b.paid && !closed && <span className="text-xs text-slate-500 dark:text-slate-400">Đang trong kỳ, chưa chốt</span>}
                     {b.paid && b.paidAt && <span className="text-xs text-brand-600 dark:text-brand-400">Đã trả {formatDate(b.paidAt)}</span>}
                   </div>
                   <div className="font-semibold whitespace-nowrap">{formatVND(b.paid ? b.total : b.payable)}</div>
@@ -88,17 +92,25 @@ export default function BnplBills({ account, userId, spendable, onChanged }) {
                         <div className="min-w-0">
                           <div className="truncate">{i.label}</div>
                           {i.fee > 0 && <div className="text-xs text-slate-400">Gốc {formatVND(i.principal)} + phí {formatVND(i.fee)}</div>}
+                          {i.paid && !b.paid && <div className="text-xs text-brand-600 dark:text-brand-400">Đã trả trước đó</div>}
                         </div>
                         <div className="whitespace-nowrap">{formatVND(i.amount)}</div>
                       </div>
                     ))}
-                    {!b.paid && (
+
+                    {!b.paid && !closed && (
+                      <div className="text-xs text-slate-400 pt-2">
+                        Hóa đơn chốt ngày {SHOPEE_STATEMENT_DAY}. Bạn có thể thanh toán sau khi hóa đơn được chốt, trước ngày {SHOPEE_DUE_DAY} tháng sau.
+                      </div>
+                    )}
+
+                    {!b.paid && closed && (
                       <div className="flex flex-wrap items-center gap-2 pt-2">
                         <select className="input py-2 sm:max-w-[200px]" value={from} onChange={(e) => setPayFrom(e.target.value)}>
                           {spendable.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                         </select>
                         <button className="btn-primary" disabled={busy} onClick={() => handlePay(b)}>
-                          {busy ? 'Đang lưu...' : `Thanh toán ${formatVND(b.payable)}`}
+                          {busy ? 'Đang lưu...' : `Thanh toán cả hóa đơn ${formatVND(b.payable)}`}
                         </button>
                       </div>
                     )}

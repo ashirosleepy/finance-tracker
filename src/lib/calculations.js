@@ -1,3 +1,5 @@
+import { billForDate, billForDueDate } from './shopeeBill'
+
 // All calculations here read already-fetched data (from the DB views / tables)
 // and never touch the database themselves — keeps the money-math testable
 // and in one place, per the "single source of truth" rule.
@@ -196,4 +198,57 @@ export function installmentsByMonth(unpaid, monthsAhead = 6, now = new Date()) {
     out.push({ month: `${d.getMonth() + 1}/${d.getFullYear()}`, 'Phải trả': value })
   }
   return out
+}
+
+// -----------------------------------------------------------------------
+// Hóa đơn theo kỳ của Shopee trả sau (chốt ngày 24, hạn 10 tháng sau, trả cả hóa đơn)
+// -----------------------------------------------------------------------
+// charges: giao dịch bnpl_charge của hạn mức. Mua trả góp (có installment_plan_id) KHÔNG
+//          vào hóa đơn theo số tiền mua, mà theo từng kỳ ở installmentPayments.
+// installmentPayments: các kỳ trả góp của hạn mức (kèm plan:{name,months}).
+// billRows: các dòng bnpl_bills đã thanh toán.
+// Chỉ trả về hóa đơn từ kỳ hiện tại trở về trước; kỳ trả góp tương lai chưa thành hóa đơn.
+// `account` giữ trong chữ ký cho tương thích, không còn dùng (ngày chốt/hạn là hằng số).
+export function buildBnplBills({ charges = [], installmentPayments = [], billRows = [], today = localISO() }) {
+  const rowByKey = new Map(billRows.map((r) => [r.bill_key, r]))
+  const map = new Map()
+  const ensure = (b) => {
+    if (!map.has(b.key)) map.set(b.key, { ...b, items: [] })
+    return map.get(b.key)
+  }
+
+  for (const t of charges) {
+    if (t.installment_plan_id) continue
+    const amount = Number(t.amount)
+    ensure(billForDate(localISO(new Date(t.occurred_at)))).items.push({
+      id: `tx-${t.id}`, kind: 'charge', refId: t.id,
+      label: t.description || 'Mua trả sau',
+      amount, principal: amount, fee: 0, paid: false, paidAt: null,
+    })
+  }
+
+  for (const p of installmentPayments) {
+    const principal = Number(p.principal_amount || 0)
+    const fee = Number(p.fee_amount || 0)
+    ensure(billForDueDate(p.due_date)).items.push({
+      id: `ip-${p.id}`, kind: 'installment', refId: p.id,
+      label: `${p.plan?.name || 'Trả góp'} (kỳ ${p.period_no}/${p.plan?.months ?? '?'})`,
+      amount: Number(p.amount ?? principal + fee), principal, fee,
+      paid: !!p.paid_at, paidAt: p.paid_at || null,
+    })
+  }
+
+  const currentKey = billForDate(today).key
+  return [...map.values()]
+    .filter((b) => b.key <= currentKey)
+    .map((b) => {
+      const row = rowByKey.get(b.key)
+      const paid = !!row || (b.items.length > 0 && b.items.every((i) => i.paid))
+      const items = b.items.map((i) => ({ ...i, paid: paid || i.paid }))
+      const total = items.reduce((s, i) => s + i.amount, 0)
+      // Kỳ trả góp đã trả lẻ từ trước (mô hình cũ) không tính lại vào số phải trả.
+      const payable = paid ? 0 : b.items.filter((i) => !i.paid).reduce((s, i) => s + i.amount, 0)
+      const lastItemPaid = items.map((i) => i.paidAt).filter(Boolean).sort().pop() || null
+      return { ...b, items, total, payable, paid, paidAt: row?.paid_at || lastItemPaid }
+    })
 }

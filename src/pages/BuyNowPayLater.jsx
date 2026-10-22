@@ -1,28 +1,34 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getBnplBalances, createBnplAccount, deleteBnplAccount, getTransactions } from '../lib/queries'
+import { getBnplBalances, createBnplAccount, deleteBnplAccount, getAccounts } from '../lib/queries'
 import { computeBnplTotals } from '../lib/calculations'
-import { formatVND, formatDateTime } from '../lib/formatters'
+import { SHOPEE_STATEMENT_DAY, SHOPEE_DUE_DAY } from '../lib/shopeeBill'
+import { formatVND } from '../lib/formatters'
+import BnplBills from './BnplBills'
 
-const emptyForm = { name: 'Shopee trả sau', credit_limit: '', statement_day: '5', due_day: '20', note: '' }
+const emptyForm = { name: 'Shopee trả sau', credit_limit: '', note: '' }
 const WARN_PCT = 80
 
 export default function BuyNowPayLater() {
   const { user } = useAuth()
   const [accounts, setAccounts] = useState([])
+  const [spendable, setSpendable] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [openId, setOpenId] = useState(null)
-  const [purchases, setPurchases] = useState([])
 
-  async function load() { setAccounts(await getBnplBalances()) }
+  async function load() {
+    const [bnpl, ac] = await Promise.all([getBnplBalances(), getAccounts()])
+    setAccounts(bnpl)
+    setSpendable(ac.filter((a) => a.type !== 'savings'))
+  }
   useEffect(() => { load() }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
     await createBnplAccount({
       user_id: user.id, name: form.name, credit_limit: Number(form.credit_limit),
-      statement_day: Number(form.statement_day), due_day: Number(form.due_day), note: form.note || null,
+      statement_day: SHOPEE_STATEMENT_DAY, due_day: SHOPEE_DUE_DAY, note: form.note || null,
     })
     setForm(emptyForm); setShowForm(false)
     await load()
@@ -32,12 +38,6 @@ export default function BuyNowPayLater() {
     if (!confirm(`Xóa tài khoản "${a.name}"?`)) return
     try { await deleteBnplAccount(a.bnpl_id); await load() }
     catch { alert('Không thể xóa: tài khoản này đang có giao dịch hoặc kế hoạch trả góp liên kết.') }
-  }
-
-  async function toggle(a) {
-    if (openId === a.bnpl_id) { setOpenId(null); return }
-    setOpenId(a.bnpl_id)
-    setPurchases(await getTransactions({ bnplAccountId: a.bnpl_id }))
   }
 
   const totals = computeBnplTotals(accounts)
@@ -51,6 +51,10 @@ export default function BuyNowPayLater() {
 
       <p className="text-sm text-slate-400">
         Đây là hạn mức tín dụng, không phải tiền trong ví. Ví ShopeePay thật hãy thêm ở trang "Tài khoản" với loại ví điện tử.
+      </p>
+      <p className="text-sm text-slate-400">
+        Mỗi tháng một hóa đơn: chốt ngày {SHOPEE_STATEMENT_DAY}, hạn trả ngày {SHOPEE_DUE_DAY} tháng sau, thanh toán cả hóa đơn một lần
+        (gồm các kỳ trả góp thuộc hóa đơn đó).
       </p>
 
       {accounts.length > 0 && (
@@ -71,13 +75,8 @@ export default function BuyNowPayLater() {
             <label className="label">Hạn mức (₫)</label>
             <input type="number" required className="input" value={form.credit_limit} onChange={(e) => setForm({ ...form, credit_limit: e.target.value })} />
           </div>
-          <div>
-            <label className="label">Ngày chốt kỳ</label>
-            <input type="number" min="1" max="31" required className="input" value={form.statement_day} onChange={(e) => setForm({ ...form, statement_day: e.target.value })} />
-          </div>
-          <div>
-            <label className="label">Ngày đến hạn thanh toán</label>
-            <input type="number" min="1" max="31" required className="input" value={form.due_day} onChange={(e) => setForm({ ...form, due_day: e.target.value })} />
+          <div className="col-span-2 text-xs text-slate-400">
+            Hóa đơn chốt ngày {SHOPEE_STATEMENT_DAY}, hạn trả ngày {SHOPEE_DUE_DAY} tháng sau (cố định theo Shopee).
           </div>
           <div className="col-span-2">
             <label className="label">Ghi chú</label>
@@ -87,10 +86,11 @@ export default function BuyNowPayLater() {
         </form>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
         {accounts.length === 0 ? <div className="text-slate-400 text-sm">Chưa có hạn mức nào.</div> : accounts.map((a) => {
           const pct = a.credit_limit > 0 ? Math.min(100, (a.used_balance / a.credit_limit) * 100) : 0
           const near = pct >= WARN_PCT
+          const open = openId === a.bnpl_id
           return (
             <div key={a.bnpl_id} className="card">
               <div className="flex items-start justify-between gap-2">
@@ -108,30 +108,16 @@ export default function BuyNowPayLater() {
                 <div className={`h-2 rounded-full ${near ? 'bg-red-500' : 'bg-brand-500'}`} style={{ width: `${pct}%` }} />
               </div>
               <div className="text-xs text-slate-400 mt-2">
-                Khả dụng: {formatVND(a.available_balance)} · Chốt kỳ ngày {a.statement_day} · Đến hạn ngày {a.due_day}
+                Khả dụng: {formatVND(a.available_balance)} · Chốt ngày {SHOPEE_STATEMENT_DAY} · Hạn trả ngày {SHOPEE_DUE_DAY} tháng sau
               </div>
               <div className="flex gap-4 mt-3">
-                <button className="text-xs text-slate-500 hover:text-brand-600" onClick={() => toggle(a)}>
-                  {openId === a.bnpl_id ? 'Ẩn giao dịch' : 'Xem giao dịch'}
+                <button className="text-xs text-slate-500 hover:text-brand-600" onClick={() => setOpenId(open ? null : a.bnpl_id)}>
+                  {open ? 'Ẩn hóa đơn' : 'Xem hóa đơn'}
                 </button>
                 <button className="text-xs text-slate-400 hover:text-red-600" onClick={() => handleDelete(a)}>Xóa</button>
               </div>
 
-              {openId === a.bnpl_id && (
-                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
-                  {purchases.length === 0 ? <div className="text-sm text-slate-400">Chưa có giao dịch.</div> : purchases.slice(0, 15).map((t) => (
-                    <div key={t.id} className="flex justify-between gap-3 text-sm">
-                      <div className="min-w-0">
-                        <div className="truncate">{t.description || (t.type === 'bnpl_charge' ? 'Mua trả sau' : 'Thanh toán')}</div>
-                        <div className="text-xs text-slate-400">{formatDateTime(t.occurred_at)}</div>
-                      </div>
-                      <div className={`whitespace-nowrap font-medium ${t.type === 'bnpl_charge' ? 'text-red-600 dark:text-red-400' : 'text-brand-600 dark:text-brand-400'}`}>
-                        {t.type === 'bnpl_charge' ? '-' : '+'}{formatVND(t.amount)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {open && <BnplBills account={a} userId={user.id} spendable={spendable} onChanged={load} />}
             </div>
           )
         })}
