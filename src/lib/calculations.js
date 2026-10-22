@@ -207,7 +207,8 @@ export function installmentsByMonth(unpaid, monthsAhead = 6, now = new Date()) {
 //          vào hóa đơn theo số tiền mua, mà theo từng kỳ ở installmentPayments.
 // installmentPayments: các kỳ trả góp của hạn mức (kèm plan:{name,months}).
 // billRows: các dòng bnpl_bills đã thanh toán.
-// Chỉ trả về hóa đơn từ kỳ hiện tại trở về trước; kỳ trả góp tương lai chưa thành hóa đơn.
+// Trả về cả hóa đơn các tháng sắp tới (chỉ gồm các kỳ trả góp), gắn cờ upcoming = true
+// khi tháng chốt sau kỳ hiện tại. Hóa đơn upcoming chưa chốt nên chưa thanh toán được.
 // `account` giữ trong chữ ký cho tương thích, không còn dùng (ngày chốt/hạn là hằng số).
 export function buildBnplBills({ charges = [], installmentPayments = [], billRows = [], today = localISO() }) {
   const rowByKey = new Map(billRows.map((r) => [r.bill_key, r]))
@@ -240,7 +241,6 @@ export function buildBnplBills({ charges = [], installmentPayments = [], billRow
 
   const currentKey = billForDate(today).key
   return [...map.values()]
-    .filter((b) => b.key <= currentKey)
     .map((b) => {
       const row = rowByKey.get(b.key)
       const paid = !!row || (b.items.length > 0 && b.items.every((i) => i.paid))
@@ -249,6 +249,6 @@ export function buildBnplBills({ charges = [], installmentPayments = [], billRow
       // Kỳ trả góp đã trả lẻ từ trước (mô hình cũ) không tính lại vào số phải trả.
       const payable = paid ? 0 : b.items.filter((i) => !i.paid).reduce((s, i) => s + i.amount, 0)
       const lastItemPaid = items.map((i) => i.paidAt).filter(Boolean).sort().pop() || null
-      return { ...b, items, total, payable, paid, paidAt: row?.paid_at || lastItemPaid }
+      return { ...b, items, total, payable, paid, paidAt: row?.paid_at || lastItemPaid, upcoming: b.key > currentKey }
     })
 }

@@ -28,9 +28,15 @@ export default function BnplBills({ account, userId, spendable, onChanged }) {
     () => (data ? buildBnplBills({ account, charges: data.tx, installmentPayments: data.ip, billRows: data.rows }) : []),
     [data, account],
   )
-  const unpaid = bills.filter((b) => !b.paid).sort((a, b) => a.key.localeCompare(b.key))
+  const unpaid = bills.filter((b) => !b.paid && !b.upcoming).sort((a, b) => a.key.localeCompare(b.key))
+  const upcoming = bills.filter((b) => !b.paid && b.upcoming).sort((a, b) => a.key.localeCompare(b.key))
   const paid = bills.filter((b) => b.paid).sort((a, b) => b.key.localeCompare(a.key))
-  const list = tab === 'unpaid' ? unpaid : paid
+  const list = tab === 'unpaid' ? unpaid : tab === 'upcoming' ? upcoming : paid
+  const emptyText = {
+    unpaid: 'Không có hóa đơn nào cần thanh toán.',
+    upcoming: 'Chưa có hóa đơn nào sắp tới (hóa đơn các tháng sau hiện khi có kỳ trả góp).',
+    paid: 'Chưa có hóa đơn nào đã thanh toán.',
+  }[tab]
   const today = localISO()
   const from = payFrom || spendable[0]?.id || ''
 
@@ -53,8 +59,8 @@ export default function BnplBills({ account, userId, spendable, onChanged }) {
 
   return (
     <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-      <div className="flex gap-1 mb-3">
-        {[['unpaid', `Chưa thanh toán (${unpaid.length})`], ['paid', 'Đã thanh toán']].map(([v, l]) => (
+      <div className="flex flex-wrap gap-1 mb-3">
+        {[['unpaid', `Chưa thanh toán (${unpaid.length})`], ['upcoming', `Sắp tới (${upcoming.length})`], ['paid', 'Đã thanh toán']].map(([v, l]) => (
           <button key={v} onClick={() => { setTab(v); setOpenKey(null) }}
             className={`px-3 py-1.5 rounded-lg text-sm ${tab === v ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
             {l}
@@ -63,7 +69,7 @@ export default function BnplBills({ account, userId, spendable, onChanged }) {
       </div>
 
       {list.length === 0 ? (
-        <div className="text-sm text-slate-400">{tab === 'unpaid' ? 'Không có hóa đơn nào cần thanh toán.' : 'Chưa có hóa đơn nào đã thanh toán.'}</div>
+        <div className="text-sm text-slate-400">{emptyText}</div>
       ) : (
         <div className="space-y-3">
           {list.map((b) => {
@@ -79,7 +85,8 @@ export default function BnplBills({ account, userId, spendable, onChanged }) {
                       Chốt ngày {formatDate(b.statementDate)} · hạn trả {formatDate(b.dueDate)}
                     </div>
                     {overdue && <span className="text-xs text-red-600 dark:text-red-400">Quá hạn</span>}
-                    {!b.paid && !closed && <span className="text-xs text-slate-500 dark:text-slate-400">Đang trong kỳ, chưa chốt</span>}
+                    {!b.paid && b.upcoming && <span className="text-xs text-slate-500 dark:text-slate-400">Chưa đến kỳ</span>}
+                    {!b.paid && !b.upcoming && !closed && <span className="text-xs text-slate-500 dark:text-slate-400">Đang trong kỳ, chưa chốt</span>}
                     {b.paid && b.paidAt && <span className="text-xs text-brand-600 dark:text-brand-400">Đã trả {formatDate(b.paidAt)}</span>}
                   </div>
                   <div className="font-semibold whitespace-nowrap">{formatVND(b.paid ? b.total : b.payable)}</div>
@@ -98,7 +105,12 @@ export default function BnplBills({ account, userId, spendable, onChanged }) {
                       </div>
                     ))}
 
-                    {!b.paid && !closed && (
+                    {!b.paid && b.upcoming && (
+                      <div className="text-xs text-slate-400 pt-2">
+                        Hóa đơn này gồm các kỳ trả góp đã lên lịch. Các khoản mua mới trong kỳ (nếu có) sẽ được cộng thêm, và bạn thanh toán được sau khi hóa đơn chốt ngày {SHOPEE_STATEMENT_DAY}.
+                      </div>
+                    )}
+                    {!b.paid && !b.upcoming && !closed && (
                       <div className="text-xs text-slate-400 pt-2">
                         Hóa đơn chốt ngày {SHOPEE_STATEMENT_DAY}. Bạn có thể thanh toán sau khi hóa đơn được chốt, trước ngày {SHOPEE_DUE_DAY} tháng sau.
                       </div>
