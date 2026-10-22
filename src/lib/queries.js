@@ -123,6 +123,16 @@ export async function createTransaction(tx) {
 export async function updateTransaction(id, patch) {
   const { data, error } = await supabase.from('transactions').update(patch).eq('id', id).select().single()
   if (error) throw error
+
+  // Giao dịch mua trả góp: tên/ghi chú của kế hoạch là bản sao lúc tạo, nên đồng bộ khi sửa.
+  // (Số tiền và ngày mua KHÔNG đồng bộ vì các kỳ góp đã được tạo sẵn — muốn đổi thì tạo lại kế hoạch.)
+  if (data?.installment_plan_id && data.type === 'bnpl_charge' && ('description' in patch || 'note' in patch)) {
+    const planPatch = {}
+    if ('description' in patch) planPatch.name = data.description?.trim() || 'Mua trả góp'
+    if ('note' in patch) planPatch.note = data.note ?? null
+    const { error: planErr } = await supabase.from('installment_plans').update(planPatch).eq('id', data.installment_plan_id)
+    if (planErr) throw planErr
+  }
   return data
 }
 
