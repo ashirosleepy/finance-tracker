@@ -4,7 +4,19 @@ import {
   getAccounts, getInstallmentPlans, getInstallmentPayments, payInstallment, deleteInstallmentPlan,
 } from '../lib/queries'
 import { installmentStatus, installmentsDueInMonth, localISO } from '../lib/calculations'
-import { formatVND, formatDate, INSTALLMENT_STATUS_LABELS, PLAN_STATUS_LABELS } from '../lib/formatters'
+import { formatVND, formatDate } from '../lib/formatters'
+
+const INSTALLMENT_STATUS_LABELS = {
+  paid: 'Đã thanh toán',
+  overdue: 'Quá hạn',
+  soon: 'Sắp đến hạn',
+  upcoming: 'Chưa đến hạn',
+}
+const PLAN_STATUS_LABELS = {
+  active: 'Đang trả',
+  overdue: 'Có kỳ quá hạn',
+  completed: 'Đã tất toán',
+}
 
 const STATUS_STYLE = {
   paid: 'text-brand-600 bg-brand-50 dark:text-brand-400 dark:bg-brand-500/10',
