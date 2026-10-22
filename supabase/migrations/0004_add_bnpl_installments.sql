@@ -1,4 +1,4 @@
--- 0003_add_bnpl_installments.sql
+-- 0004_add_bnpl_installments.sql
 -- Shopee trả sau (BNPL) + kế hoạch trả góp.
 --
 -- Mô hình:
@@ -9,18 +9,10 @@
 --   * Trả nợ / trả kỳ góp        -> transactions.type = 'bnpl_payment' (trừ tiền từ tài khoản thật)
 
 -- ---------------------------------------------------------------------------
--- 1) Loại giao dịch mới — chọn MỘT trong hai tuỳ cách bạn đã khai báo transactions.type
+-- 1) Loại giao dịch mới
 -- ---------------------------------------------------------------------------
--- (a) Nếu là enum (tên enum có thể khác, kiểm tra trong 0001/0002):
--- alter type transaction_type add value if not exists 'bnpl_charge';
--- alter type transaction_type add value if not exists 'bnpl_payment';
---
--- (b) Nếu là CHECK constraint: drop constraint cũ rồi tạo lại, thêm 2 giá trị mới, ví dụ:
--- alter table public.transactions drop constraint transactions_type_check;
--- alter table public.transactions add constraint transactions_type_check
---   check (type in ('income','expense','transfer','adjustment','credit_card_charge',
---     'credit_card_payment','debt_lend','debt_borrow','debt_repay','debt_collect',
---     'bnpl_charge','bnpl_payment'));
+-- transaction_type là enum: hai giá trị bnpl_charge / bnpl_payment được thêm ở
+-- 0003_add_bnpl_enum_values.sql — phải chạy file đó (riêng, xong rồi) TRƯỚC file này.
 
 -- ---------------------------------------------------------------------------
 -- 2) Tài khoản hạn mức (Shopee trả sau)
