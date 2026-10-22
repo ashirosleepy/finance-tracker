@@ -3,7 +3,9 @@
 // and in one place, per the "single source of truth" rule.
 
 // Types that count as real expense (spending), matching the design doc.
-const EXPENSE_TYPES = new Set(['expense', 'credit_card_charge'])
+// bnpl_charge = mua bằng Shopee trả sau: tính là chi tiêu ngay lúc mua (giống credit_card_charge).
+// bnpl_payment (trả nợ/kỳ góp) KHÔNG tính vì chỉ là chuyển tiền để trả khoản đã ghi nhận.
+const EXPENSE_TYPES = new Set(['expense', 'credit_card_charge', 'bnpl_charge'])
 const INCOME_TYPES = new Set(['income'])
 
 export function computeAssetTotals(accountBalances) {
@@ -16,7 +18,7 @@ export function computeAssetTotals(accountBalances) {
   return { ...totals, liquidTotal, realAssetsTotal }
 }
 
-export function computeLiabilityTotals(debtBalances, creditCardBalances) {
+export function computeLiabilityTotals(debtBalances, creditCardBalances, bnplBalances = []) {
   let debtIOwe = 0
   let debtOwedToMe = 0
   for (const d of debtBalances) {
@@ -24,8 +26,9 @@ export function computeLiabilityTotals(debtBalances, creditCardBalances) {
     else debtOwedToMe += Number(d.remaining_amount)
   }
   const creditCardDebt = creditCardBalances.reduce((sum, c) => sum + Number(c.used_balance), 0)
-  const totalLiabilities = debtIOwe + creditCardDebt
-  return { debtIOwe, debtOwedToMe, creditCardDebt, totalLiabilities }
+  const bnplDebt = bnplBalances.reduce((sum, b) => sum + Number(b.used_balance), 0)
+  const totalLiabilities = debtIOwe + creditCardDebt + bnplDebt
+  return { debtIOwe, debtOwedToMe, creditCardDebt, bnplDebt, totalLiabilities }
 }
 
 // Net Worth = (real assets + money owed to me) - (money I owe + credit card debt)
@@ -122,12 +125,75 @@ export function forecastDebtOutflow(debtBalances, monthsAhead) {
     .reduce((sum, d) => sum + Number(d.remaining_amount), 0)
 }
 
-export function buildForecast({ currentLiquid, recurringPayments, debtBalances, plannedIncomeByMonths = {} }) {
+export function buildForecast({ currentLiquid, recurringPayments, debtBalances, installments = [], plannedIncomeByMonths = {} }) {
   return [3, 6, 12].map((months) => {
     const recurringOut = forecastRecurringOutflow(recurringPayments, months)
     const debtOut = forecastDebtOutflow(debtBalances, months)
+    const installmentOut = forecastInstallmentOutflow(installments, months)
     const plannedIncome = plannedIncomeByMonths[months] || 0
-    const projected = currentLiquid + plannedIncome - recurringOut - debtOut
-    return { months, plannedIncome, recurringOut, debtOut, projected }
+    const projected = currentLiquid + plannedIncome - recurringOut - debtOut - installmentOut
+    return { months, plannedIncome, recurringOut, debtOut, installmentOut, projected }
   })
+}
+
+// -----------------------------------------------------------------------
+// Shopee trả sau (BNPL) & trả góp
+// -----------------------------------------------------------------------
+// "YYYY-MM-DD" theo giờ LOCAL (toISOString() sẽ ra giờ UTC, có thể lệch ngày).
+export function localISO(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+export function computeBnplTotals(bnplBalances) {
+  let totalLimit = 0
+  let used = 0
+  for (const b of bnplBalances) {
+    totalLimit += Number(b.credit_limit)
+    used += Number(b.used_balance)
+  }
+  const pct = totalLimit > 0 ? Math.min(100, (used / totalLimit) * 100) : 0
+  return { totalLimit, used, available: totalLimit - used, pct }
+}
+
+// 'paid' | 'overdue' | 'soon' (trong 7 ngày tới) | 'upcoming'
+export function installmentStatus(payment, today = localISO()) {
+  if (payment.paid_at) return 'paid'
+  if (payment.due_date < today) return 'overdue'
+  const soon = new Date()
+  soon.setDate(soon.getDate() + 7)
+  if (payment.due_date <= localISO(soon)) return 'soon'
+  return 'upcoming'
+}
+
+// `unpaid` = các kỳ chưa trả (paid_at is null).
+export function installmentsDueInMonth(unpaid, date = new Date()) {
+  const prefix = localISO(date).slice(0, 7)
+  return unpaid
+    .filter((p) => p.due_date.startsWith(prefix))
+    .reduce((sum, p) => sum + Number(p.amount), 0)
+}
+
+// Gồm cả kỳ đã quá hạn nhưng chưa trả (vẫn là tiền phải ra).
+export function forecastInstallmentOutflow(unpaid, monthsAhead) {
+  const end = new Date()
+  end.setMonth(end.getMonth() + monthsAhead)
+  const endStr = localISO(end)
+  return unpaid
+    .filter((p) => !p.paid_at && p.due_date <= endStr)
+    .reduce((sum, p) => sum + Number(p.amount), 0)
+}
+
+// Số tiền trả góp theo từng tháng (tháng đầu gồm cả kỳ quá hạn chưa trả).
+export function installmentsByMonth(unpaid, monthsAhead = 6, now = new Date()) {
+  const out = []
+  for (let i = 0; i < monthsAhead; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
+    const prefix = localISO(d).slice(0, 7)
+    const value = unpaid
+      .filter((p) => (i === 0 ? p.due_date.slice(0, 7) <= prefix : p.due_date.startsWith(prefix)))
+      .reduce((sum, p) => sum + Number(p.amount), 0)
+    out.push({ month: `${d.getMonth() + 1}/${d.getFullYear()}`, 'Phải trả': value })
+  }
+  return out
 }
