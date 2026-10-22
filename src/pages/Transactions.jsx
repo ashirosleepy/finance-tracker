@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import {
   getAccounts, getCategories, getCreditCardBalances, getDebtBalances,
   getTransactions, createTransaction, updateTransaction, deleteTransaction,
+  getBnplBalances, createInstallmentPlan,
 } from '../lib/queries'
 import { TRANSACTION_TYPE_LABELS } from '../lib/formatters'
 import TransactionForm from '../components/TransactionForm'
@@ -14,6 +15,7 @@ export default function Transactions() {
   const [categories, setCategories] = useState([])
   const [creditCards, setCreditCards] = useState([])
   const [debts, setDebts] = useState([])
+  const [bnplAccounts, setBnplAccounts] = useState([])
   const [transactions, setTransactions] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState(null)
@@ -22,10 +24,10 @@ export default function Transactions() {
   const hasActiveFilters = Object.values(filters).some(Boolean)
 
   async function loadAll() {
-    const [acc, cat, cc, dt] = await Promise.all([
-      getAccounts(), getCategories(), getCreditCardBalances(), getDebtBalances(),
+    const [acc, cat, cc, dt, bnpl] = await Promise.all([
+      getAccounts(), getCategories(), getCreditCardBalances(), getDebtBalances(), getBnplBalances(),
     ])
-    setAccounts(acc); setCategories(cat); setCreditCards(cc); setDebts(dt)
+    setAccounts(acc); setCategories(cat); setCreditCards(cc); setDebts(dt); setBnplAccounts(bnpl)
   }
 
   async function loadTransactions() {
@@ -62,6 +64,28 @@ export default function Transactions() {
         throw err
       }
       // Balances (accounts/cards/debts) depend on server-side calc, refresh quietly
+      loadAll()
+    } else if (payload.installment) {
+      // Mua trả góp: tạo kế hoạch + các kỳ + giao dịch mua (không optimistic vì tạo nhiều bản ghi)
+      const { installment, ...tx } = payload
+      try {
+        await createInstallmentPlan({
+          userId: tx.user_id,
+          bnplAccountId: tx.bnpl_account_id,
+          name: tx.description || 'Mua trả góp',
+          totalAmount: tx.amount,
+          months: installment.months,
+          feeTotal: installment.feeTotal,
+          firstDueDate: installment.firstDueDate,
+          occurredAt: tx.occurred_at,
+          categoryId: tx.category_id,
+          note: tx.note,
+        })
+      } catch (err) {
+        alert('Không thể tạo khoản trả góp: ' + (err.message || err))
+        throw err
+      }
+      await loadTransactions()
       loadAll()
     } else {
       // Optimistic create: show a temporary row right away
@@ -120,7 +144,7 @@ export default function Transactions() {
 
       {showForm && (
         <TransactionForm
-          accounts={accounts} categories={categories} creditCards={creditCards} debts={debts}
+          accounts={accounts} categories={categories} creditCards={creditCards} debts={debts} bnplAccounts={bnplAccounts}
           userId={user.id} initialData={editingTransaction}
           onSubmit={handleSubmit} onCancel={handleCloseForm}
         />
