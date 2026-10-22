@@ -11,8 +11,8 @@ const TYPE_GROUPS = [
   { value: 'credit_card_payment', label: TRANSACTION_TYPE_LABELS.credit_card_payment },
   { value: 'debt_lend', label: TRANSACTION_TYPE_LABELS.debt_lend },
   { value: 'debt_borrow', label: TRANSACTION_TYPE_LABELS.debt_borrow },
-  { value: 'bnpl_charge', label: TRANSACTION_TYPE_LABELS.bnpl_charge },
-  { value: 'bnpl_payment', label: TRANSACTION_TYPE_LABELS.bnpl_payment },
+  { value: 'bnpl_charge', label: TRANSACTION_TYPE_LABELS.bnpl_charge || 'Mua bằng Shopee trả sau' },
+  { value: 'bnpl_payment', label: TRANSACTION_TYPE_LABELS.bnpl_payment || 'Trả nợ Shopee trả sau' },
 ]
 
 // Which fields are relevant per type — drives which inputs are shown.
