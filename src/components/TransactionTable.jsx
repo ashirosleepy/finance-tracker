@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import { formatVND, formatDateTime, TRANSACTION_TYPE_LABELS } from '../lib/formatters'
 
-const EXPENSE_TYPES = new Set(['expense', 'credit_card_charge', 'debt_repay', 'debt_lend', 'credit_card_payment'])
+const EXPENSE_TYPES = new Set(['expense', 'credit_card_charge', 'debt_repay', 'debt_lend', 'credit_card_payment', 'bnpl_charge', 'bnpl_payment'])
 const INCOME_TYPES = new Set(['income', 'debt_collect', 'debt_borrow'])
 
 function rowMeta(t) {

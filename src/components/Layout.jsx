@@ -8,6 +8,8 @@ const NAV_ITEMS = [
   { to: '/accounts', label: 'Tài khoản' },
   { to: '/debts', label: 'Nợ' },
   { to: '/credit-cards', label: 'Thẻ tín dụng' },
+  { to: '/bnpl', label: 'Shopee trả sau' },
+  { to: '/installments', label: 'Trả góp' },
   { to: '/recurring', label: 'Khoản phải trả' },
   { to: '/savings', label: 'Tiết kiệm' },
   { to: '/reports', label: 'Báo cáo' },

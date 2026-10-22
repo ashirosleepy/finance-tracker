@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { TRANSACTION_TYPE_LABELS } from '../lib/formatters'
+import { TRANSACTION_TYPE_LABELS, formatVND } from '../lib/formatters'
 import DateTimePicker from './DateTimePicker'
 
 const TYPE_GROUPS = [
@@ -11,6 +11,8 @@ const TYPE_GROUPS = [
   { value: 'credit_card_payment', label: TRANSACTION_TYPE_LABELS.credit_card_payment },
   { value: 'debt_lend', label: TRANSACTION_TYPE_LABELS.debt_lend },
   { value: 'debt_borrow', label: TRANSACTION_TYPE_LABELS.debt_borrow },
+  { value: 'bnpl_charge', label: TRANSACTION_TYPE_LABELS.bnpl_charge },
+  { value: 'bnpl_payment', label: TRANSACTION_TYPE_LABELS.bnpl_payment },
 ]
 
 // Which fields are relevant per type — drives which inputs are shown.
@@ -23,6 +25,10 @@ const FIELD_MAP = {
   credit_card_payment: ['fromAccount', 'creditCard'],
   debt_lend: ['fromAccount', 'debt'],
   debt_borrow: ['toAccount', 'debt'],
+  // Mua trả sau: chỉ ghi nhận chi tiêu + chiếm hạn mức, chưa trừ tiền thật.
+  bnpl_charge: ['bnplAccount', 'category'],
+  // Trả nợ trả sau: trừ tiền từ tài khoản thật, giảm dư nợ hạn mức.
+  bnpl_payment: ['fromAccount', 'bnplAccount'],
 }
 
 // Returns "YYYY-MM-DDTHH:mm" in the browser's LOCAL time (what <input type="datetime-local">
@@ -60,6 +66,11 @@ function getEmptyForm() {
     category_id: '',
     credit_card_id: '',
     debt_id: '',
+    bnpl_account_id: '',
+    plan_mode: 'single', // 'single' | 'installment' (chỉ dùng cho bnpl_charge khi tạo mới)
+    installment_months: '3',
+    installment_fee: '',
+    installment_first_due: '',
     description: '',
     note: '',
     adjustment_direction: 'increase',
@@ -79,6 +90,11 @@ function toFormState(tx) {
     category_id: tx.category_id || '',
     credit_card_id: tx.credit_card_id || '',
     debt_id: tx.debt_id || '',
+    bnpl_account_id: tx.bnpl_account_id || '',
+    plan_mode: 'single',
+    installment_months: '3',
+    installment_fee: '',
+    installment_first_due: '',
     description: tx.description || '',
     note: tx.note || '',
     // adjustment rows only ever populate one of from/to; direction is derived
@@ -90,7 +106,7 @@ function toFormState(tx) {
 // Pass `initialData` (a transaction row) to edit it in place instead of
 // creating a new one. onSubmit(payload, id) receives the transaction's id
 // as the second argument when editing, or undefined when creating.
-export default function TransactionForm({ accounts, categories, creditCards, debts, userId, onSubmit, onCancel, initialData }) {
+export default function TransactionForm({ accounts, categories, creditCards, debts, bnplAccounts = [], userId, onSubmit, onCancel, initialData }) {
   const [form, setForm] = useState(() => (initialData ? toFormState(initialData) : getEmptyForm()))
   const [saving, setSaving] = useState(false)
   const isEditing = Boolean(initialData)
@@ -121,6 +137,7 @@ export default function TransactionForm({ accounts, categories, creditCards, deb
         category_id: null,
         credit_card_id: null,
         debt_id: null,
+        bnpl_account_id: null,
       }
 
       if (fields.includes('fromAccount')) payload.from_account_id = form.from_account_id || null
@@ -128,6 +145,16 @@ export default function TransactionForm({ accounts, categories, creditCards, deb
       if (fields.includes('category')) payload.category_id = form.category_id || null
       if (fields.includes('creditCard')) payload.credit_card_id = form.credit_card_id || null
       if (fields.includes('debt')) payload.debt_id = form.debt_id || null
+      if (fields.includes('bnplAccount')) payload.bnpl_account_id = form.bnpl_account_id || null
+      // Mua trả góp: caller (Transactions.jsx) thấy payload.installment thì gọi createInstallmentPlan
+      // thay vì createTransaction.
+      if (!isEditing && form.type === 'bnpl_charge' && form.plan_mode === 'installment') {
+        payload.installment = {
+          months: Number(form.installment_months),
+          feeTotal: Number(form.installment_fee || 0),
+          firstDueDate: form.installment_first_due || null,
+        }
+      }
       if (fields.includes('account')) {
         // adjustment: increase -> to_account_id, decrease -> from_account_id
         if (form.adjustment_direction === 'increase') payload.to_account_id = form.from_account_id || null
@@ -260,6 +287,61 @@ export default function TransactionForm({ accounts, categories, creditCards, deb
             </select>
             <p className="text-sm text-slate-400 mt-1">Chưa có khoản nợ phù hợp? Tạo trước ở trang "Nợ".</p>
           </div>
+        )}
+
+        {fields.includes('bnplAccount') && (
+          <div>
+            <label className="label">Tài khoản Shopee trả sau</label>
+            <select className="input" required value={form.bnpl_account_id}
+              onChange={(e) => update({ bnpl_account_id: e.target.value })}>
+              <option value="">-- Chọn hạn mức --</option>
+              {bnplAccounts.map((b) => (
+                <option key={b.bnpl_id} value={b.bnpl_id}>{b.name} (khả dụng {formatVND(b.available_balance)})</option>
+              ))}
+            </select>
+            <p className="text-sm text-slate-400 mt-1">Chưa có? Tạo trước ở trang "Shopee trả sau".</p>
+          </div>
+        )}
+
+        {form.type === 'bnpl_charge' && !isEditing && (
+          <div className="sm:col-span-2 space-y-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg p-3">
+            <div className="flex flex-wrap gap-4 text-sm">
+              <label className="flex items-center gap-2">
+                <input type="radio" name="plan_mode" checked={form.plan_mode === 'single'} onChange={() => update({ plan_mode: 'single' })} />
+                Trả một lần (theo kỳ sao kê)
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="radio" name="plan_mode" checked={form.plan_mode === 'installment'} onChange={() => update({ plan_mode: 'installment' })} />
+                Trả góp theo tháng
+              </label>
+            </div>
+            {form.plan_mode === 'installment' && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="label">Số tháng</label>
+                  <input type="number" min="1" max="60" required className="input" value={form.installment_months}
+                    onChange={(e) => update({ installment_months: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Tổng phí/lãi (₫)</label>
+                  <input type="number" min="0" className="input" placeholder="0" value={form.installment_fee}
+                    onChange={(e) => update({ installment_fee: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Kỳ đầu đến hạn</label>
+                  <input type="date" className="input" value={form.installment_first_due}
+                    onChange={(e) => update({ installment_first_due: e.target.value })} />
+                </div>
+                <p className="sm:col-span-3 text-sm text-slate-400">Để trống ngày = 1 tháng sau ngày mua. Số tiền ở trên là giá trị mua (chưa gồm phí).</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {isEditing && initialData?.installment_plan_id && (
+          <p className="sm:col-span-2 text-sm text-amber-600 dark:text-amber-400">
+            Giao dịch này thuộc một kế hoạch trả góp — sửa số tiền ở đây không làm đổi các kỳ. Muốn đổi kế hoạch, hãy xóa ở trang "Trả góp" và tạo lại.
+          </p>
         )}
 
         <div className="sm:col-span-2">

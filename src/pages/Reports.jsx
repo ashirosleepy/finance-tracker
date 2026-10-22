@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts'
 import {
-  getTransactions, getAccountBalances, getRecurringPayments, getDebtBalances,
+  getTransactions, getAccountBalances, getRecurringPayments, getDebtBalances, getInstallmentPayments,
 } from '../lib/queries'
 import {
-  totalIncome, totalExpense, expenseByCategory, computeAssetTotals, buildForecast,
+  totalIncome, totalExpense, expenseByCategory, computeAssetTotals, buildForecast, installmentsByMonth,
 } from '../lib/calculations'
 import { formatVND } from '../lib/formatters'
 
@@ -21,14 +21,16 @@ export default function Reports() {
   const [accountBalances, setAccountBalances] = useState([])
   const [recurring, setRecurring] = useState([])
   const [debtBalances, setDebtBalances] = useState([])
+  const [installments, setInstallments] = useState([]) // các kỳ trả góp CHƯA trả
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const [tx, ab, rp, db] = await Promise.all([
+      const [tx, ab, rp, db, ins] = await Promise.all([
         getTransactions(), getAccountBalances(), getRecurringPayments(), getDebtBalances(),
+        getInstallmentPayments({ unpaidOnly: true }),
       ])
-      setTransactions(tx); setAccountBalances(ab); setRecurring(rp); setDebtBalances(db)
+      setTransactions(tx); setAccountBalances(ab); setRecurring(rp); setDebtBalances(db); setInstallments(ins)
       setLoading(false)
     }
     load()
@@ -110,7 +112,8 @@ export default function Reports() {
   }, [transactions, drillMonth])
 
   const assets = computeAssetTotals(accountBalances)
-  const forecast = buildForecast({ currentLiquid: assets.liquidTotal, recurringPayments: recurring, debtBalances })
+  const forecast = buildForecast({ currentLiquid: assets.liquidTotal, recurringPayments: recurring, debtBalances, installments })
+  const installmentData = installmentsByMonth(installments, 6)
 
   if (loading) return <div className="text-slate-400">Đang tải...</div>
 
@@ -274,6 +277,21 @@ export default function Reports() {
         </div>
       </div>
 
+      <div className="card">
+        <div className="text-sm font-semibold text-slate-500 mb-1">Tiền trả góp phải trả theo tháng</div>
+        <div className="text-xs text-slate-400 mb-3">Tháng đầu gồm cả các kỳ quá hạn chưa trả.</div>
+        {installments.length === 0 ? <div className="text-slate-400 text-sm py-8 text-center">Không có kỳ trả góp nào chưa trả.</div> : (
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={installmentData}>
+              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => (v / 1000000).toFixed(1) + 'tr'} />
+              <Tooltip formatter={(v) => formatVND(v)} />
+              <Bar dataKey="Phải trả" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
       <div>
         <h2 className="text-lg font-semibold mb-1">Dự báo tài chính</h2>
         <p className="text-sm text-slate-400 mb-4">
@@ -292,6 +310,7 @@ export default function Reports() {
               <div className="text-xs text-slate-400 mt-2 space-y-0.5">
                 <div>Khoản phải trả định kỳ: -{formatVND(f.recurringOut)}</div>
                 <div>Nợ đến hạn: -{formatVND(f.debtOut)}</div>
+                <div>Trả góp / trả sau: -{formatVND(f.installmentOut)}</div>
               </div>
             </div>
           ))}

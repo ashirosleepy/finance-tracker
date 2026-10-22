@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient'
+import { localISO } from './calculations'
 
 // ---------------------------------------------------------------------------
 // Accounts
@@ -88,7 +89,7 @@ export async function createCategory(category) {
 // ---------------------------------------------------------------------------
 // Transactions
 // ---------------------------------------------------------------------------
-// filters: { fromDate, toDate, type, categoryId, accountId, debtId, creditCardId, search }
+// filters: { fromDate, toDate, type, categoryId, accountId, debtId, creditCardId, bnplAccountId, search }
 export async function getTransactions(filters = {}) {
   let query = supabase
     .from('transactions')
@@ -101,6 +102,7 @@ export async function getTransactions(filters = {}) {
   if (filters.categoryId) query = query.eq('category_id', filters.categoryId)
   if (filters.debtId) query = query.eq('debt_id', filters.debtId)
   if (filters.creditCardId) query = query.eq('credit_card_id', filters.creditCardId)
+  if (filters.bnplAccountId) query = query.eq('bnpl_account_id', filters.bnplAccountId)
   if (filters.accountId) {
     query = query.or(`from_account_id.eq.${filters.accountId},to_account_id.eq.${filters.accountId}`)
   }
@@ -297,4 +299,143 @@ export async function getNetWorthSummary() {
   const { data, error } = await supabase.from('net_worth_summary').select('*').maybeSingle()
   if (error) throw error
   return data
+}
+
+// ---------------------------------------------------------------------------
+// Shopee trả sau (BNPL) — hạn mức
+// ---------------------------------------------------------------------------
+export async function getBnplBalances() {
+  const { data, error } = await supabase.from('bnpl_balances').select('*').order('name')
+  if (error) throw error
+  return data
+}
+
+export async function createBnplAccount(account) {
+  const { data, error } = await supabase.from('bnpl_accounts').insert(account).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateBnplAccount(id, patch) {
+  const { data, error } = await supabase.from('bnpl_accounts').update(patch).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteBnplAccount(id) {
+  const { error } = await supabase.from('bnpl_accounts').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ---------------------------------------------------------------------------
+// Trả góp
+// ---------------------------------------------------------------------------
+// Cộng n tháng vào "YYYY-MM-DD", kẹp ngày cuối tháng (31/1 + 1 tháng = 28/2).
+export function addMonthsISO(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number)
+  const target = new Date(y, m - 1 + n, 1)
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate()
+  target.setDate(Math.min(d, lastDay))
+  return localISO(target)
+}
+
+export async function getInstallmentPlans() {
+  const { data, error } = await supabase
+    .from('installment_plan_summary').select('*')
+    .order('next_due_date', { ascending: true, nullsFirst: false })
+  if (error) throw error
+  return data
+}
+
+// opts: { planId, unpaidOnly }
+export async function getInstallmentPayments({ planId, unpaidOnly } = {}) {
+  let query = supabase
+    .from('installment_payments')
+    .select('*, plan:installment_plans(id,name,months,bnpl_account_id)')
+    .order('due_date')
+  if (planId) query = query.eq('plan_id', planId)
+  if (unpaidOnly) query = query.is('paid_at', null)
+  const { data, error } = await query
+  if (error) throw error
+  return data
+}
+
+// Tạo kế hoạch + các kỳ + giao dịch "mua bằng trả sau" (ghi nhận chi tiêu, chưa trừ tiền thật).
+// Phần dư do làm tròn dồn vào kỳ cuối.
+export async function createInstallmentPlan({
+  userId, bnplAccountId, name, totalAmount, months, feeTotal = 0,
+  firstDueDate, occurredAt, categoryId = null, note = null,
+}) {
+  const purchaseDate = occurredAt ? new Date(occurredAt) : new Date()
+  const first = firstDueDate || addMonthsISO(localISO(purchaseDate), 1)
+  const total = Number(totalAmount)
+  const fee = Number(feeTotal) || 0
+
+  const { data: plan, error: planErr } = await supabase.from('installment_plans').insert({
+    user_id: userId, bnpl_account_id: bnplAccountId, name,
+    total_amount: total, months, fee_total: fee,
+    monthly_amount: Math.round((total + fee) / months),
+    first_due_date: first, purchased_at: purchaseDate.toISOString(), note,
+  }).select().single()
+  if (planErr) throw planErr
+
+  const principalBase = Math.floor(total / months)
+  const feeBase = Math.floor(fee / months)
+  const rows = Array.from({ length: months }, (_, i) => {
+    const last = i === months - 1
+    return {
+      user_id: userId, plan_id: plan.id, period_no: i + 1,
+      due_date: addMonthsISO(first, i),
+      principal_amount: last ? total - principalBase * (months - 1) : principalBase,
+      fee_amount: last ? fee - feeBase * (months - 1) : feeBase,
+    }
+  })
+
+  const { error: payErr } = await supabase.from('installment_payments').insert(rows)
+  if (payErr) {
+    await supabase.from('installment_plans').delete().eq('id', plan.id)
+    throw payErr
+  }
+
+  const { error: txErr } = await supabase.from('transactions').insert({
+    user_id: userId, type: 'bnpl_charge', amount: total,
+    occurred_at: purchaseDate.toISOString(),
+    bnpl_account_id: bnplAccountId, installment_plan_id: plan.id,
+    category_id: categoryId, description: name, note,
+  })
+  if (txErr) {
+    await supabase.from('installment_plans').delete().eq('id', plan.id) // cascade xoá các kỳ
+    throw txErr
+  }
+  return plan
+}
+
+// Ghi nhận đã trả 1 kỳ: tạo giao dịch trừ tiền từ tài khoản thật + đánh dấu kỳ đã trả.
+export async function payInstallment({ userId, plan, payment, accountId }) {
+  const { data: tx, error: txErr } = await supabase.from('transactions').insert({
+    user_id: userId, type: 'bnpl_payment', amount: payment.amount,
+    from_account_id: accountId,
+    bnpl_account_id: plan.bnpl_account_id,
+    installment_plan_id: plan.plan_id,
+    installment_payment_id: payment.id,
+    description: `Trả góp ${plan.name} (kỳ ${payment.period_no}/${plan.months})`,
+  }).select().single()
+  if (txErr) throw txErr
+
+  const { error: upErr } = await supabase.from('installment_payments')
+    .update({ paid_at: new Date().toISOString(), transaction_id: tx.id })
+    .eq('id', payment.id)
+  if (upErr) {
+    await supabase.from('transactions').delete().eq('id', tx.id) // hoàn tác
+    throw upErr
+  }
+  return tx
+}
+
+// Xoá kế hoạch kèm mọi giao dịch liên quan (mua + các kỳ đã trả) để số dư/hạn mức về đúng.
+export async function deleteInstallmentPlan(planId) {
+  const { error: txErr } = await supabase.from('transactions').delete().eq('installment_plan_id', planId)
+  if (txErr) throw txErr
+  const { error } = await supabase.from('installment_plans').delete().eq('id', planId)
+  if (error) throw error
 }

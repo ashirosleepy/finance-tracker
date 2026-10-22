@@ -9,6 +9,8 @@ import Transactions from './pages/Transactions'
 import Accounts from './pages/Accounts'
 import Debts from './pages/Debts'
 import CreditCards from './pages/CreditCards'
+import BuyNowPayLater from './pages/BuyNowPayLater'
+import Installments from './pages/Installments'
 import RecurringPayments from './pages/RecurringPayments'
 import Savings from './pages/Savings'
 import Reports from './pages/Reports'
@@ -35,6 +37,8 @@ export default function App() {
               <Route path="accounts" element={<Accounts />} />
               <Route path="debts" element={<Debts />} />
               <Route path="credit-cards" element={<CreditCards />} />
+              <Route path="bnpl" element={<BuyNowPayLater />} />
+              <Route path="installments" element={<Installments />} />
               <Route path="recurring" element={<RecurringPayments />} />
               <Route path="savings" element={<Savings />} />
               <Route path="reports" element={<Reports />} />

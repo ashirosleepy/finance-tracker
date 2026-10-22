@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   getAccountBalances, getDebtBalances, getCreditCardBalances,
-  getTransactions, getRecurringPayments,
+  getTransactions, getRecurringPayments, getBnplBalances, getInstallmentPayments,
 } from '../lib/queries'
 import {
   computeAssetTotals, computeLiabilityTotals, computeNetWorth,
   totalIncome, totalExpense, startOfWeek, startOfMonth, startOfYear,
+  computeBnplTotals, installmentsDueInMonth, installmentStatus,
 } from '../lib/calculations'
 import { formatVND, formatDate, ACCOUNT_TYPE_LABELS } from '../lib/formatters'
 import StatCard from '../components/StatCard'
@@ -17,31 +18,35 @@ export default function Dashboard() {
   const [creditCardBalances, setCreditCardBalances] = useState([])
   const [transactions, setTransactions] = useState([])
   const [recurring, setRecurring] = useState([])
+  const [bnplBalances, setBnplBalances] = useState([])
+  const [installments, setInstallments] = useState([]) // các kỳ trả góp CHƯA trả
   const [showSensitive, setShowSensitive] = useState(false)
 
   const mask = (value) => (showSensitive ? formatVND(value) : '••••••••')
 
   useEffect(() => {
     async function load() {
-      const [ab, db, cb, tx, rp] = await Promise.all([
+      const [ab, db, cb, tx, rp, bb, ins] = await Promise.all([
         getAccountBalances(), getDebtBalances(), getCreditCardBalances(),
         getTransactions(), getRecurringPayments(),
+        getBnplBalances(), getInstallmentPayments({ unpaidOnly: true }),
       ])
       setAccountBalances(ab); setDebtBalances(db); setCreditCardBalances(cb)
       setTransactions(tx); setRecurring(rp)
+      setBnplBalances(bb); setInstallments(ins)
       setLoading(false)
     }
     load()
   }, [])
 
   const assets = useMemo(() => computeAssetTotals(accountBalances), [accountBalances])
-  const liabilities = useMemo(() => computeLiabilityTotals(debtBalances, creditCardBalances), [debtBalances, creditCardBalances])
+  const liabilities = useMemo(() => computeLiabilityTotals(debtBalances, creditCardBalances, bnplBalances), [debtBalances, creditCardBalances, bnplBalances])
   const netWorth = useMemo(
     () => computeNetWorth(assets.realAssetsTotal, liabilities.debtOwedToMe, liabilities.totalLiabilities),
     [assets, liabilities]
   )
   const netLiquidAfterDebt = useMemo(
-    () => assets.liquidTotal - liabilities.debtIOwe - liabilities.creditCardDebt,
+    () => assets.liquidTotal - liabilities.debtIOwe - liabilities.creditCardDebt - liabilities.bnplDebt,
     [assets, liabilities]
   )
 
@@ -57,6 +62,12 @@ export default function Dashboard() {
   const upcomingRecurring = recurring.filter((r) => r.status === 'active' && new Date(r.next_due_date) <= in7Days)
   const dueDebts = debtBalances.filter((d) => d.status !== 'paid' && d.due_date && new Date(d.due_date) <= in7Days)
   const overdueDebts = debtBalances.filter((d) => d.status === 'overdue')
+
+  const bnplTotals = computeBnplTotals(bnplBalances)
+  const installmentsThisMonth = installmentsDueInMonth(installments, now)
+  const overdueInstallments = installments.filter((p) => installmentStatus(p) === 'overdue')
+  const soonInstallments = installments.filter((p) => installmentStatus(p) === 'soon')
+  const limitWarnings = bnplBalances.filter((b) => b.credit_limit > 0 && b.used_balance / b.credit_limit >= 0.8)
 
   if (loading) return <div className="text-slate-400">Đang tải dữ liệu...</div>
 
@@ -85,6 +96,13 @@ export default function Dashboard() {
           <StatCard label="Người khác nợ tôi" value={formatVND(liabilities.debtOwedToMe)} tone="neutral" />
           <StatCard label="Tôi đang nợ" value={formatVND(liabilities.debtIOwe)} tone="negative" />
           <StatCard label="Dư nợ thẻ tín dụng" value={formatVND(liabilities.creditCardDebt)} tone="negative" />
+          {bnplBalances.length > 0 && (
+            <>
+              <StatCard label="Dư nợ Shopee trả sau" value={formatVND(liabilities.bnplDebt)} tone="negative" />
+              <StatCard label="Hạn mức trả sau đã dùng" value={`${bnplTotals.pct.toFixed(0)}%`} tone={bnplTotals.pct >= 80 ? 'negative' : 'neutral'} />
+            </>
+          )}
+          <StatCard label="Trả góp phải trả tháng này" value={formatVND(installmentsThisMonth)} tone="neutral" />
         </div>
       </div>
 
@@ -122,7 +140,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {(upcomingRecurring.length > 0 || dueDebts.length > 0 || overdueDebts.length > 0) && (
+      {(upcomingRecurring.length > 0 || dueDebts.length > 0 || overdueDebts.length > 0 || overdueInstallments.length > 0 || soonInstallments.length > 0 || limitWarnings.length > 0) && (
         <div>
           <h2 className="text-sm font-semibold text-slate-500 mb-3">Cảnh báo</h2>
           <div className="card space-y-2">
@@ -134,6 +152,21 @@ export default function Dashboard() {
             {dueDebts.filter(d => d.status !== 'overdue').map((d) => (
               <div key={d.debt_id} className="text-sm text-amber-600">
                 ⏰ Nợ với {d.person_name} đến hạn {formatDate(d.due_date)} — còn {formatVND(d.remaining_amount)}
+              </div>
+            ))}
+            {overdueInstallments.map((p) => (
+              <div key={p.id} className="text-sm text-red-600">
+                ⚠ Trả góp "{p.plan?.name}" kỳ {p.period_no}/{p.plan?.months} đã quá hạn ({formatDate(p.due_date)}) — {formatVND(p.amount)}
+              </div>
+            ))}
+            {soonInstallments.map((p) => (
+              <div key={p.id} className="text-sm text-amber-600">
+                ⏰ Trả góp "{p.plan?.name}" kỳ {p.period_no}/{p.plan?.months} đến hạn {formatDate(p.due_date)} — {formatVND(p.amount)}
+              </div>
+            ))}
+            {limitWarnings.map((b) => (
+              <div key={b.bnpl_id} className="text-sm text-amber-600">
+                ⚠ {b.name} đã dùng {Math.round((b.used_balance / b.credit_limit) * 100)}% hạn mức — còn {formatVND(b.available_balance)}
               </div>
             ))}
             {upcomingRecurring.map((r) => (
